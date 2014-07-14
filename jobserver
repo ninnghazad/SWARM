@@ -2,9 +2,8 @@ jobserver = {}
 version = "0.1"
 os.loadAPI("swarm")
 
-startTime = swarm.timestamp()
-label = os.getComputerLabel()
-id = os.getComputerID()
+swarm.setSystemType("jobserver")
+
 config = {}
 
 local e,msg,func,job,jobid,status
@@ -16,6 +15,7 @@ sent = {}
 --local active = {}
 active = {}
 callDepth = 0
+counter = {}
 
 function save(callDepth)
 	callDepth = callDepth + 1
@@ -35,31 +35,27 @@ function load(callDepth)
 	active = config["active"] or {}
 	jobs = config["jobs"] or {} 
 	sent = config["sent"] or {}
+	
+	swarm.statistics["Loaded Jobs"] = swarm.statistics["Loaded Jobs"] + swarm.countArray(jobs)
 	for i,v in pairs(sent) do
 		jobs[#jobs+1] = v
 		table.remove(sent,i)
+		swarm.statistics["Loaded Jobs"] = swarm.statistics["Loaded Jobs"] + 1
 	end
 	sent = {}
 	for i,v in pairs(active) do
 		jobs[#jobs+1] = v
+		swarm.statistics["Loaded Jobs"] = swarm.statistics["Loaded Jobs"] + 1
 	end
 	active = {}
 	lastId = config["lastJobID"] or 0
 	return config
 end
-function countArray(array)
-	local i,v
-	local count = 0
-	for i,v in pairs(array) do
-		count = count + 1
-	end
-	return count
-end
 function main()
 	local callDepth = 1
 	swarm.status(-1000,"main() started",true)
-	while true do
-		swarm.status(callDepth,"main routine: jobs: "..countArray(jobs).." active: "..countArray(active).." sent: "..countArray(sent).." finished: "..config["finished"])
+	while not swarm.quit do
+		swarm.status(callDepth,"main routine: jobs: "..swarm.countArray(jobs).." active: "..swarm.countArray(active).." sent: "..swarm.countArray(sent).." finished: "..config["finished"])
 		e = {os.pullEvent("modem_message")}
 	--	if e[3] == 17 then
 	--		print("j: "..#jobs.." s: "..#sent.." a: "..#active)
@@ -70,6 +66,7 @@ function main()
 			--	print("no jobs in queue, ask me again later")
 				-- No jobs currently, ask me again later.
 				rednet.send(e[4],string.char(21).."nil")
+				swarm.statistics["No Jobs"] = swarm.statistics["No Jobs"] + 1
 			else			
 				
 				-- Sent a job to drone to consider
@@ -83,8 +80,9 @@ function main()
 				sent[jobid] = job
 				table.remove(jobs,1)
 				save(callDepth)
-				print("drone "..e[4].." requested job, suggesting job "..jobid)
-				--return
+				
+				swarm.statistics["Suggested Jobs"] = swarm.statistics["Suggested Jobs"] + 1
+				
 			end
 		elseif e[5]["message"]:byte(1) == 22 then -- drone tells us if it will do a job or not
 			msg = textutils.unserialize(string.sub(e[5]["message"],2))
@@ -95,31 +93,34 @@ function main()
 				jobs[#jobs+1] = sent[jobid]
 				table.remove(sent,jobid)
 				save(callDepth)
-				print("drone "..e[4].." declined job "..jobid)
+				swarm.statistics["Declined Jobs"] = swarm.statistics["Declined Jobs"] + 1
+				
 			else 
 	--			-- drone has accepted job, yay
 				active[jobid] = sent[jobid]
 				table.remove(sent,jobid)
 				save(callDepth)
-				print("drone "..e[4].." accepted job "..jobid)
-	--			print(textutils.serialize(active))
+				swarm.statistics["Accepted Jobs"] = swarm.statistics["Accepted Jobs"] + 1
+				
 			end
 		elseif e[5]["message"]:byte(1) == 24 then -- drone tells us about the status of its job
 			msg = textutils.unserialize(string.sub(e[5]["message"],2))
 			jobid = msg[1]
 			status = msg[2]
 			msg = msg[3]
-			print("drone "..e[4].." reports for job "..jobid..": status: "..status.." msg: "..msg)
+		--	print("drone "..e[4].." reports for job "..jobid..": status: "..status.." msg: "..msg)
 			if status == -1 then
 				table.insert(jobs,active[jobid])
 				table.remove(active,jobid)
 				save(callDepth)
-				print("drone "..e[4].." failed to finish job "..jobid..".")
+				swarm.statistics["Failed Jobs"] = swarm.statistics["Failed Jobs"] + 1
+				
 			elseif status == -2 then
 				table.remove(active,jobid)
 				save(callDepth)
-				config["finished"] = config["finished"] + 1
-				print("drone "..e[4].." successfully finished job "..jobid..".")
+				swarm.statistics["Finished Jobs"] = swarm.statistics["Finished Jobs"] + 1
+			else
+				-- status update
 			end
 		elseif e[5]["message"]:byte(1) == 25 then -- someone sends a new job.
 			msg = textutils.unserialize(string.sub(e[5]["message"],2))
@@ -129,18 +130,20 @@ function main()
 				r,error = loadstring(msg[1])
 				if r == nil or type(r) == "table" then
 					rednet.send(e[4],string.char(26)..textutils.serialize({false,error}))
-					print("received BAD new job: "..error)
+				
+					swarm.statistics["Bad Jobs"] = swarm.statistics["Bad Jobs"] + 1
 				else
 					table.insert(jobs,{0,msg[1]})
 					save(callDepth)
 					rednet.send(e[4],string.char(26)..textutils.serialize({true}))
-					print("received GOOD new job: "..msg[1])
+				
+					swarm.statistics["Created Jobs"] = swarm.statistics["Created Jobs"] + 1
 				end
 			else 
-				print("received NIL job, ignoring")
+				--print("received NIL job, ignoring")
 			end
 		elseif e[5]["message"]:byte(1) == 100 then -- Status query 
-			rednet.send(e[4],string.char(101).."JOBSERVER "..id.." ["..label.."] jobs: "..countArray(jobs).." active: "..countArray(active).." sent: "..countArray(sent).." finished: "..config["finished"])
+			rednet.send(e[4],string.char(101).."JOBSERVER "..swarm.id.." ["..swarm.label.."] jobs: "..swarm.countArray(jobs).." active: "..swarm.countArray(active).." sent: "..swarm.countArray(sent).." finished: "..config["finished"])
 		elseif e[5]["message"]:byte(1) == 110 then -- Reboot signal
 			swarm.status(callDepth,"received reboot signal")
 			save(callDepth)
@@ -159,7 +162,6 @@ function main()
 end
 
 
-
 --[[
     The one and only: run()
 --]]
@@ -167,8 +169,15 @@ function run()
 	term.clear()
 	term.setCursorPos(1,1)
 	
-	print("[SWARM jobserver #"..id.."]")
-	swarm.log("[SWARM jobserver #"..id.."]")
+	-- Prepare statistics table
+	swarm.statistics["Created Jobs"] = 0
+	swarm.statistics["Bad Jobs"] = 0
+	swarm.statistics["Accepted Jobs"] = 0
+	swarm.statistics["Declined Jobs"] = 0
+	swarm.statistics["Finished Jobs"] = 0
+	swarm.statistics["Failed Jobs"] = 0
+	swarm.statistics["Suggested Jobs"] = 0
+	swarm.statistics["Loaded Jobs"] = 0
 	
 	-- Open modem
 	swarm.openModem()
@@ -192,12 +201,6 @@ function run()
 
 	-- Wrappers, to catch errors and stuff
 	function wrapMain() return swarm.wrap(main,"main") end 
-	parallel.waitForAny(wrapMain)
-
-	if quit == true then
-		print("successfully terminated")
-	else
-		swarm.err("abnormal termination of routine")
-	end
+	parallel.waitForAny(wrapMain,swarm.wrapGui)
 	return
 end

@@ -5,6 +5,7 @@
 mapserver = {}
 version = "0.1"
 os.loadAPI("swarm")
+swarm.setSystemType("mapserver")
 
 function locate()
 	while true do
@@ -98,7 +99,7 @@ function net()
 			else
 				errors[#errors+1] = "received corrupt position broadcast from "..id.." "..textutils.serialize(coord)
 			end
-			counter[4] = counter[4] + 1
+			swarm.statistics["Drone Broadcasts"] = swarm.statistics["Drone Broadcasts"] + 1
 		elseif msg:byte(1) == 1 then -- worldMap get request
 			--local start = os.clock()
 			coord = textutils.unserialize(string.sub(msg,2))
@@ -109,10 +110,10 @@ function net()
 			else
 				errors[#errors+1] = "received corrupt get request from "..id
 			end
-			counter[1] = counter[1] + 1
+			swarm.statistics["GET"] = swarm.statistics["GET"] + 1
 			--swarm.log("get request took "..(os.clock()-start)) -- takes 0
 		elseif msg:byte(1) == 3 then -- worldMap set request
-			counter[2] = counter[2] + 1
+			swarm.statistics["SET"] = swarm.statistics["SET"] + 1
 			coord = textutils.unserialize(string.sub(msg,2))
 			if coord ~= nil then
 				if coord[4] == nil then
@@ -134,7 +135,7 @@ function net()
 			rednet.send(id,string.char(101).."MAPSERVER "..id.." ")
 		elseif msg:byte(1) == 110 then -- Reboot signal
 			swarm.status(callDepth,"received reboot signal")
-			save()
+		--	save()
 			rednet.send(id,string.char(111))
 			
 			swarm.status(callDepth,"will now reboot")
@@ -145,7 +146,7 @@ function net()
 			break
 		elseif msg:byte(1) == 140 then -- Shutdown signal
 			swarm.status(callDepth,"received shutdown signal")
-			save()
+		--	save()
 			rednet.send(id,string.char(141))
 			swarm.status(callDepth,"will now shutdown")
 			os.shutdown()
@@ -153,7 +154,7 @@ function net()
 		elseif msg:byte(1) == 120 then -- Full status query
 			rednet.send(id,string.char(121)..textutils.serialize(swarm._status))
 		elseif msg == "PING" or msg == "ping" or msg:byte(1) == 123 then -- Serve PING/GPS request
-			counter[3] = counter[3] + 1
+			swarm.statistics["GPS"] = swarm.statistics["GPS"] + 1
 			rednet.send(id,textutils.serialize({x,y,z}))
 		--	errors[#errors+1] = "gps to "..id
 		end
@@ -273,112 +274,7 @@ function save()
 end
 
 
-function gui()
-	local activity = {"Ooo","oOo","ooO","oOo"}
-	local activityCounter = 1
-	local startTime = swarm.timestamp()
-	local timer = os.startTimer(statusInterval)
-	local k,v,e,msg
-	while true do
-		sleep(statusInterval);
-		--e = {os.pullEvent("timer")}
-		--if e[2] == timer then
-			
-			if mode == "status" then -- Display numeric status infos
-				term.clear()
-				--term.clearLine()
-				term.setCursorPos(1,1)
-				msg = "~( *> SWARM mapserver <* )~ ["..activity[activityCounter].."]\n"
-				msg = msg.."[up: "..swarm.formatTime(os.clock()).."]\n"
-				msg = msg.."[run: "..swarm.formatTime((swarm.timestamp()-startTime)/20).."]".."\n"
-				activityCounter = activityCounter + 1
-				if activityCounter > #activity then activityCounter = 1 end
-				msg = msg.."get requests served: "..counter[1].."\n"
-				msg = msg.."set requests served: "..counter[2].."\n"
-				msg = msg.."area requests served: "..counter[5].."\n"
-				msg = msg.."path get requests served: "..counter[6].."\n"
-				msg = msg.."path set requests served: "..counter[7].."\n"
-				msg = msg.."gps requests served: "..counter[3].."\n"
-				msg = msg.."position broadcasts: "..counter[4].."\n"
-				--[[msg = msg.."drones: ".."\n"
-				--local now = swarm.timestamp()
-				for k,v in pairs(dronePositions) do
-					msg = msg..k..": "..textutils.serialize(v).."\n"
-					--print(k..": "..v[1][1]..","..v[1][2]..","..v[1][3].." "..v[1][4].."["..(now-v[2]).." s ago.]")
-				end
-				msg = msg.."\n"
-				]]--
-				msg = msg.."errors:\n"
-				for k,v in pairs(errors) do
-					msg = msg..k..": "..v.."\n"
-				end
-				--swarm.log(msg)
-				print(msg)
-			--[[elseif mode == "map" then -- Display graphic map, ooh, the oldskool-goodness...
-				local x,y,z,v,tx,ty
-				term.clear()
-				term.setCursorPos(1,1)
-				screenMap = {}
-				for y=1,screenSize[2],1 do
-					ty = (viewPos[2] - (screenSize[2]/2)) + y
-					for x=1,screenSize[1],1 do
-						tx = (viewPos[1] - (screenSize[1]/2)) + x
-							v = worldMap:get(tx,ty,viewPos[3])
-							if v == nil then
-								v = "#"
-							elseif v[1] == 0 then
-								v = "."
-							else
-								v = "X"
-							end
-						--end
-						if screenMap[y] == nil then
-							screenMap[y] = v
-						else
-							screenMap[y] = screenMap[y]..v
-						end
-					end
-				end
-				
-				-- Draw generated map on screen
-				term.setCursorPos(1,2)
-				for y=1,screenSize[2],1 do
-					term.write(screenMap[y])
-					if y < screenSize[2] then
-						print()
-					end
-				end
-				
-				-- Overlay drone positions
-				for k,v in pairs(dronePositions) do
-					if v[1][3] == viewPos[3] then
-						x = v[1][1] - (viewPos[1] - (screenSize[1]/2))
-						y = v[1][2] - (viewPos[2] - (screenSize[2]/2))
-						if not (x < 0 or y < 0 or x > screenSize[1] or y > screenSize[2]) then
-							term.setCursorPos(x,y)
-							term.setTextColor(16384)
-							term.write("@")
-						end
-						
-					end
-				end
-				
-				-- Overlay current viewPos
-				term.setCursorPos(1,1)
-				term.setTextColor(16384)
-				term.write("["..viewPos[1].."]["..viewPos[2].."]["..viewPos[3].."]")
-				term.setTextColor(1)
-				]]
-			end
-						
-		--	timer = os.startTimer(statusInterval)
-		--end
-	end
-end
 
-
-os.loadAPI("swarm")	
-swarm.debug.override()
 
 
 function run()
@@ -394,7 +290,15 @@ function run()
 	name = os.getComputerLabel()
 	id = os.getComputerID()
 	dronePositions = {}
-	counter = {0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+
+	swarm.statistics["GET"] = 0
+	swarm.statistics["SET"] = 0
+	swarm.statistics["GET Area"] = 0
+	swarm.statistics["GET Path"] = 0
+	swarm.statistics["SET Path"] = 0
+	swarm.statistics["GPS"] = 0
+	swarm.statistics["Drone Broadcasts"] = 0
+	
 	saveInterval = 3600 -- once an hour
 	statusInterval = 0.5
 	--local viewPos = {283,-300,84}
@@ -415,10 +319,9 @@ function run()
 
 	function wrapReceiver() return swarm.wrap(net,"network receiver") end 
 	function wrapWriter() return swarm.wrap(save,"data writer") end 
-	function wrapGui() return swarm.wrap(gui,"gui") end 
 	function wrapKeyboard() return swarm.wrap(key,"keyboard handler") end 
 		
-	parallel.waitForAny(wrapReceiver,wrapWriter,wrapGui,wrapKeyboard)
+	parallel.waitForAny(wrapReceiver,wrapWriter,swarm.wrapGui,wrapKeyboard)
 
 	print("shutting down...")
 	--sleep(7200*10)

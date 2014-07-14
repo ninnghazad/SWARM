@@ -7,6 +7,7 @@
 drone = {}
 version = "0.1"
 os.loadAPI("swarm")
+swarm.setSystemType("drone")
 
 DRONE_MAP_CACHE_TIMEOUT = 12000
 DRONE_LONGLOOP_YIELD_COUNT = 100
@@ -906,8 +907,8 @@ end
 function moveTo(target,retries,callDepth)
 	retries = retries or -1
 	if target == nil then
-		print("bug: moveTo: pos is nil.")
-		print(""..nil)
+		err("BUG: pos is nil")
+		
 	end
 	
 	swarm.status(callDepth,"move to "..target[1]..","..target[2]..","..target[3].." ["..(#target).."] - "..retries.." retries.")
@@ -1778,10 +1779,7 @@ function run()
 	callDepth = 0
 	term.clear()
 	term.setCursorPos(1,1)
-	
-	print("[SWARM drone #"..id.."]")
-	swarm.log("[SWARM drone #"..id.."]")
-
+		
 	if peripheral.getType("left") == "Miny Chunky Module" then
 		print("Using the fabulous Miny Chunky Module!")
 		useMinyMod = true
@@ -1857,7 +1855,7 @@ function run()
 	function wrapReceiver() return swarm.wrap(net,"network receiver") end 
 	function wrapBroadcaster() return swarm.wrap(cast,"network broadcaster") end 
 	function wrapMain() return swarm.wrap(main,"main") end 
-	parallel.waitForAny(wrapReceiver,wrapBroadcaster,wrapMain)
+	parallel.waitForAny(wrapReceiver,wrapBroadcaster,wrapMain,swarm.wrapGui)
 
 	if quit == true then
 		print("successfully terminated")

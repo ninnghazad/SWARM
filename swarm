@@ -25,9 +25,27 @@ debug.override()
 os.loadAPI("map")
 os.loadAPI("heap")
 
+-- Returns integer tick-timestamp
+function timestamp()
+	return (os.day()*24000)+(os.time()*1000)
+end
+
 version = "0.1"
+label = os.getComputerLabel()
 id = os.getComputerID()
 configFile = "config_"..id
+guiUpdateInterval = 1
+unknownErrorString = "UNKOWN ERROR"
+fatalErrorString = "FATAL ERROR"
+activityIndicatorString = {"[Ooo]","[oOo]","[ooO]","[oOo]"}
+
+-- Constants
+activityCounter = 1
+quit = false
+quit = false
+startTime = timestamp()
+statistics = {}
+systemType = "[TYPE NOT SET]"
 
 -- Direction-definitions, don't just change those, will mess up stuff elsewhere
 -- These are so ugly cause i need them to start at 0 not 1
@@ -89,12 +107,62 @@ reverseDirs[3] = 1
 reverseDirs[4] = 5
 reverseDirs[5] = 4 
 
-
--- Returns integer tick-timestamp
-function timestamp()
-	return (os.day()*24000)+(os.time()*1000)
+function log(msg)
+--	print("log #############")
+	local logfile = io.open("./log_"..id,"a") 
+	if logfile ~= nil then
+		logfile:write(msg.."\n")
+		logfile:close()
+	else	
+		print("FATAL: Could not open logfile 'log_ID'.")
+		shell.exit(1)
+	end
 end
-function formatTime(time)
+
+function setSystemType(t)
+	systemType = t
+end
+function getSystemType(t)
+	return systemType
+end
+function countArray(array)
+	local i,v
+	local count = 0
+	for i,v in pairs(array) do
+		count = count + 1
+	end
+	return count
+end
+
+
+function activityIndicator()
+	local r = activityIndicatorString[activityCounter]
+	activityCounter = activityCounter + 1
+	if activityCounter > #activityIndicatorString then activityCounter = 1 end
+	return r
+end
+
+function getInfoString()
+	return "SWARM "..systemType.." #"..id.." ["..label.."]"
+end
+function _gui()
+	local k,v,e,msg
+	while not quit do
+		sleep(guiUpdateInterval);
+		term.clear()
+		term.setCursorPos(1,1)
+		msg = getInfoString().." "..activityIndicator().."\n"
+		msg = msg.."[uptime - sys.: "..formatTime(os.clock(),true)..", prog.: "..formatTime((timestamp()-startTime)/20,true).."]".."\n"
+		for k,v in pairs(statistics) do
+			msg = msg ..k..": "..v.."\n"
+		end
+		print(msg)
+	end
+end
+function wrapGui() return wrap(_gui,"gui") end 
+
+function formatTime(time,short)
+	short = short or false
 	local t = {}
 	t[1] = time % 60
 	time = (time - t[1]) / 60
@@ -110,27 +178,25 @@ function formatTime(time)
 	
 	local str = ""
 	t[1] = math.ceil(t[1]*100)/100
-	if #t < 6 then return "" end
-	if t[6] > 0 then str = str..t[6].." months, " end
-	if t[5] > 0 then str = str..t[5].." weeks, " end
-	if t[4] > 0 then str = str..t[4].." days, " end
-	if t[3] > 0 then str = str..t[3].." hours, " end
-	if t[2] > 0 then str = str..t[2].." minutes, " end
-	if t[1] > 0 then str = str..t[1].." seconds " end
+	if short then 
+		if #t < 6 then return "" end
+		if t[6] > 0 then str = str..t[6].." mnths, " end
+		if t[5] > 0 then str = str..t[5].." weeks, " end
+		if t[4] > 0 then str = str..t[4].." days, " end
+		if t[3] > 0 then str = str..t[3].." hours, " end
+		if t[2] > 0 then str = str..t[2].." mins, " end
+		if t[1] > 0 then str = str..t[1].." secs " end
+	else
+		if #t < 6 then return "" end
+		if t[6] > 0 then str = str..t[6].." months, " end
+		if t[5] > 0 then str = str..t[5].." weeks, " end
+		if t[4] > 0 then str = str..t[4].." days, " end
+		if t[3] > 0 then str = str..t[3].." hours, " end
+		if t[2] > 0 then str = str..t[2].." minutes, " end
+		if t[1] > 0 then str = str..t[1].." seconds " end
+	end
 	return str
 end
-
-function log(msg)
-	local logfile = fs.open("log_"..os.getComputerID(),"a") 
-	
-	if logfile ~= nil then
-		logfile.write(msg.."\n")
-		logfile.close()
-	else	
-		print("WARN: Could not open logfile 'log_ID'.")
-	end
-end
-
 
 __status = ""
 _status = {}
@@ -171,17 +237,26 @@ function status(callDepth,msg,doPrint)
 --	log(textutils.serialize(_status))
 end
 
-function err(e) 
-	local str = "unknown error of type "..type(e)
-	if type(e) == "string" then str = textutils.serialize(e) end
-	local msg = "\n"..timestamp().." ERROR: "..str.."\n\n"..debug.traceback().."\n\n\n"
-	log(textutils.serialize(msg))
-	print(str)
-	if errors ~= nil and type(errors) == "table" then
-		errors[#errors+1] = msg
+_error = false
+_errorDone = false 
+function err(e)
+	_error = true
+	local msg = unknownErrorString
+	if type(e) ~= "string" then
+		e = textutils.serialize(e)
 	end
-	print(""..nil)
-	return msg
+	msg = fatalErrorString..":\n"..e.."\n"
+	msg = msg..debug.currentFunction().."\n"
+	quit = true
+	sleep(1)
+	term.clear()
+	term.setCursorPos(1,1)
+	print(msg)
+	msg = msg.."\n"..debug.traceback("",1).."\n\n"
+	log(msg)
+	sleep(1)
+	_errorDone = true
+	shell.exit(1)
 end
 
 -- Right now only works with number-values
@@ -196,30 +271,19 @@ textutils.serializeMap = function( t )
 end
 
 function wrap(func,name)
-	local function wrapError(e)
-		log(textutils.serialize(e))
-		err(e)
-	end
---	log("AHA0")
-	callDepth = 1
-	status(callDepth,"booting '"..name.."' ...")
-	
---	log(__status.."\n")
---	print("AHA1")
 	local r = xpcall(func,wrapError)
 	while r ~= true do
 		-- r ~= true and r~= false means that the function was a success, but still wants to be called again
-		if r == false then status(callDepth,"'"..name.."' has failed with '"..textutils.serialize(r).."', restarting.") end
-		log(__status.."\n")
-		sleep(4)
-		r = xpcall(func,wrapError)
 		
+		sleep(0)
+		r = xpcall(func,err)
 	end
-	
-	status(callDepth,"'"..name.."' has returned: "..textutils.serialize(r))
-	
-	log(__status.."\n")
-	
+	while _error and not _errorDone do
+		sleep(1)
+	end
+	if quit then
+		return false
+	end
 	return r
 end
 
@@ -317,16 +381,16 @@ end
 -- Encodes strings to be used as HTTP GET-params in urls.
 -- url_encode from http://lua-users.org/wiki/StringRecipes -- with a few changes
 function urlEncode(str)
-  if (str) then
-    str = string.gsub (str, "\n", " ")
-    str = string.gsub (str, "\t", " ")
-    str = string.gsub (str, "  ", " ")
-    str = string.gsub (str, "  ", " ")
-    str = string.gsub (str, "([^%w %-%_%.%~])",
-        function (c) return string.format ("%%%02X", string.byte(c)) end)
-    str = string.gsub (str, " ", "+")
-  end
-  return str	
+	if (str) then
+		str = string.gsub (str, "\n", " ")
+		str = string.gsub (str, "\t", " ")
+		str = string.gsub (str, "  ", " ")
+		str = string.gsub (str, "  ", " ")
+		str = string.gsub (str, "([^%w %-%_%.%~])",
+		function (c) return string.format ("%%%02X", string.byte(c)) end)
+		str = string.gsub (str, " ", "+")
+	end
+	return str	
 end
 
 
@@ -444,6 +508,3 @@ function getDirection(xDir , yDir , zDir)
 	end
 end
 
-function log(msg)
-	status(-2,msg)
-end

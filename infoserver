@@ -5,15 +5,13 @@
 infoserver = {}
 version = "0.1"
 os.loadAPI("swarm")
+swarm.setSystemType("infoserver")
 
 -- Settings:
 local url = "http://dunkelraum.net/share/alphaomega.php"
 
 -- Code:
 function run()
-	print("SWARM infoserver #"..os.getComputerID().."")
-	print("Collects status messages from drones and sends them to webdisplay.")
-	print("Waiting for response(s), press Q to quit.")
 	swarm.openModem()
 	local t = os.startTimer(4)
 	local e,msg,data,r
@@ -99,8 +97,8 @@ function run()
 		if (os.clock() - lastTime) > 1.0 then
 			term.setCursorPos(1,1)
 			term.clear()
-			print("SWARM Status Listener ["..os.getComputerID().."] - up: "..(os.clock() - startTime))
-			print("Seen drone ids:")
+			print(swarm.getInfoString().." "..swarm.activityIndicator())
+			print("Received data from ids:")
 			
 			local tmp = {}
 			
