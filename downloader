@@ -13,7 +13,7 @@ for i,fn in pairs(files) do
 	if r then
 		r = r.readAll()
 		print("Saving "..fn)
-		f = fs.open(fn,"w")
+		f = io.open(fn,"w")
 		f.write(r)
 		f.close()
 		print("Finished "..fn)
