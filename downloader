@@ -18,9 +18,10 @@ for i,fn in pairs(files) do
 		f = io.open("./"..fn,"w")
 		f:write(r)
 		f:close()
-		print("Successfully downloaded "..fn)
+		print("OK: "..fn)
 	else
 		print("Could not download "..url..fn)
+		os.exit(true)
 	end
 end
 print("All downloads finished.\n\nTo install type one of:")
