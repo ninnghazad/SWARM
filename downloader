@@ -1,0 +1,25 @@
+local url = "https://raw.githubusercontent.com/ninnghazad/SWARM/master/"
+local files = {
+	"debug",
+	"map",
+	"heap",
+	"swarm",
+	"drone",
+}
+local r,i,f,fn
+for i,fn in pairs(files) do
+	print("Downloading "..f)
+	r = http.get(url.."/"..fn)
+	r = r.readAll()
+	print("Saving "..f)
+	f = fs.open(f,"w")
+	f.write(r)
+	f.close()
+	print("Finished "..f)
+end
+print("All downloads finished. To install type one of:")
+print("\tswarm_install_drone")
+print("\tswarm_install_mapserver")
+print("\tswarm_install_jobserver")
+print("\tswarm_install_infoserver")
+print("To just use the accompanying tools, no install is necessary.")
