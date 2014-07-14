@@ -8,6 +8,7 @@ local files = {
 	
 	"swarm_install_drone",
 	"swarm_config_drone",
+	"swarm_drone",
 	
 }
 local r,i,f,fn
@@ -24,6 +25,9 @@ for i,fn in pairs(files) do
 		os.exit(true)
 	end
 end
+
+term.clear()
+term.setCursorPos(1,1)
 print("All downloads finished.\n\nTo install type one of:")
 print("\tswarm_install_drone")
 print("\tswarm_install_mapserver")
