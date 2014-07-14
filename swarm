@@ -1,0 +1,449 @@
+--[[
+	msg-header-bytes:
+	
+	1	get value from worldMap by xyz
+	2	answer to 1, returning the requested value or nil
+	3	set value to worldMap by xyz
+	4	get area
+	5	get known path
+	6	set known path
+	7	get known response
+	9	chatter
+	10	position broadcast
+	100	PING
+	101	PING reply
+	109	shutdown drone reply
+	110	shutdown drone
+	255	are you there from drone to server
+]]--
+
+swarm = {}
+
+debug = dofile("debug")
+debug.override()
+
+os.loadAPI("map")
+os.loadAPI("heap")
+
+version = "0.1"
+id = os.getComputerID()
+configFile = "config_"..id
+
+-- Direction-definitions, don't just change those, will mess up stuff elsewhere
+-- These are so ugly cause i need them to start at 0 not 1
+dirNames = {}
+dirNames[0] = "north"
+dirNames[1] = "east"
+dirNames[2] = "south"
+dirNames[3] = "west"
+dirNames[4] = "up"
+dirNames[5] = "down"
+ xDirs = { }
+xDirs[0] = 0
+xDirs[1] = 1
+xDirs[2] = 0
+xDirs[3] = -1
+xDirs[4] = 0
+xDirs[5] = 0
+ yDirs = { }
+yDirs[0] = -1
+yDirs[1] = 0
+yDirs[2] = 1
+yDirs[3] = 0
+yDirs[4] = 0
+yDirs[5] = 0
+ zDirs = { }
+zDirs[0] = 0
+zDirs[1] = 0
+zDirs[2] = 0
+zDirs[3] = 0
+zDirs[4] = 1
+zDirs[5] = -1
+xReverseDirs = { }
+xReverseDirs[0] = 0
+xReverseDirs[1] = -1
+xReverseDirs[2] = 0
+xReverseDirs[3] = 1
+xReverseDirs[4] = 0
+xReverseDirs[5] = 0
+ yReverseDirs = { }
+yReverseDirs[0] = 1
+yReverseDirs[1] = 0
+yReverseDirs[2] = -1
+yReverseDirs[3] = 0
+yReverseDirs[4] = 0
+yReverseDirs[5] = 0
+ zReverseDirs = { }
+zReverseDirs[0] = 0
+zReverseDirs[1] = 0
+zReverseDirs[2] = 0
+zReverseDirs[3] = 0
+zReverseDirs[4] = -1
+zReverseDirs[5] = 1
+ reverseDirs = {}
+reverseDirs[-1] = -1
+reverseDirs[0] = 2
+reverseDirs[1] = 3
+reverseDirs[2] = 0
+reverseDirs[3] = 1
+reverseDirs[4] = 5
+reverseDirs[5] = 4 
+
+
+-- Returns integer tick-timestamp
+function timestamp()
+	return (os.day()*24000)+(os.time()*1000)
+end
+function formatTime(time)
+	local t = {}
+	t[1] = time % 60
+	time = (time - t[1]) / 60
+	t[2] = time % 60
+	time = (time - t[2]) / 60
+	t[3] = time % 24
+	time = (time - t[3]) / 24
+	t[4] = time % 7
+	time = (time - t[4]) / 7
+	t[5] = time % 4
+	time = (time - t[5]) / 4
+	t[6] = time % 12
+	
+	local str = ""
+	t[1] = math.ceil(t[1]*100)/100
+	if #t < 6 then return "" end
+	if t[6] > 0 then str = str..t[6].." months, " end
+	if t[5] > 0 then str = str..t[5].." weeks, " end
+	if t[4] > 0 then str = str..t[4].." days, " end
+	if t[3] > 0 then str = str..t[3].." hours, " end
+	if t[2] > 0 then str = str..t[2].." minutes, " end
+	if t[1] > 0 then str = str..t[1].." seconds " end
+	return str
+end
+
+function log(msg)
+	local logfile = fs.open("log_"..os.getComputerID(),"a") 
+	
+	if logfile ~= nil then
+		logfile.write(msg.."\n")
+		logfile.close()
+	else	
+		print("WARN: Could not open logfile 'log_ID'.")
+	end
+end
+
+
+__status = ""
+_status = {}
+unknownCallDepth = -10
+
+function status(callDepth,msg,doPrint)
+	if msg == nil then
+		err("BUG: nil msg to status()!")
+	end
+	doPrint = doPrint or false
+	if doPrint then
+		print(msg)
+	end
+	
+	if callDepth == nil or type(callDepth) ~= "number" then
+		err("BUG: nil callDepth to status()!")
+	end
+	
+	
+	callDepth = callDepth or unknownCallDepth
+	
+	if callDepth >= 0 and type(_status) == "table" then
+		local change = true
+		while change do
+			change = false
+			for k,v in pairs(_status) do
+				if k > callDepth then
+					table.remove(_status,k)
+					change = true
+					break
+				end
+			end
+		end
+	end
+	__status = msg
+--	_status = _status or {}
+	_status[callDepth] = __status
+--	log(textutils.serialize(_status))
+end
+
+function err(e) 
+	local str = "unknown error of type "..type(e)
+	if type(e) == "string" then str = textutils.serialize(e) end
+	local msg = "\n"..timestamp().." ERROR: "..str.."\n\n"..debug.traceback().."\n\n\n"
+	log(textutils.serialize(msg))
+	print(str)
+	if errors ~= nil and type(errors) == "table" then
+		errors[#errors+1] = msg
+	end
+	print(""..nil)
+	return msg
+end
+
+-- Right now only works with number-values
+textutils.serializeMap = function( t )
+	if type(t) == "number" then return tostring(t) end
+	sleep(0)
+	local result = "{"
+	for k,v in pairs(t) do
+		result = result..("["..tostring(k).."]="..textutils.serializeMap(v)..",")
+	end
+	return result.."}"
+end
+
+function wrap(func,name)
+	local function wrapError(e)
+		log(textutils.serialize(e))
+		err(e)
+	end
+--	log("AHA0")
+	callDepth = 1
+	status(callDepth,"booting '"..name.."' ...")
+	
+--	log(__status.."\n")
+--	print("AHA1")
+	local r = xpcall(func,wrapError)
+	while r ~= true do
+		-- r ~= true and r~= false means that the function was a success, but still wants to be called again
+		if r == false then status(callDepth,"'"..name.."' has failed with '"..textutils.serialize(r).."', restarting.") end
+		log(__status.."\n")
+		sleep(4)
+		r = xpcall(func,wrapError)
+		
+	end
+	
+	status(callDepth,"'"..name.."' has returned: "..textutils.serialize(r))
+	
+	log(__status.."\n")
+	
+	return r
+end
+
+-- Reverse a table, used to flip paths
+function reverse(tab)
+	if #tab == 0 then
+		return {}
+	end
+	local out = {}
+	local i = 0
+	for i=#tab,1,-1 do
+		sleep(0)--
+		out[(#tab+1)-i] = tab[i]
+	end
+	return out
+end
+function reverseInplace(tab)
+     local l = #tab+1
+     for i=1, (l-1)*.5 do
+          t[i], t[l-i] = t[l-i], t[i]
+     end
+end
+function compare(a,b)
+	for i = 1,#a,1 do
+		if b[i] == nil or  a[i] ~= b[i] then
+			return false
+		end
+	end
+	return true
+end
+-- Our heuristic distance functions, both for point-to-point and point-to-area distance
+
+function manhattanDistance(pos1,pos2,pos3)
+	if pos3 == nil or compare(pos2,pos3) then
+		return math.abs(pos1[1]-pos2[1])+math.abs(pos1[2]-pos2[2])+math.abs(pos1[3]-pos2[3])
+	else
+		local closest = {}
+
+		if pos1[1] < pos2[1] then
+			closest[1] = pos2[1]
+		elseif pos1[1] > pos3[1] then
+			closest[1] = pos3[1]
+		else
+			closest[1] = pos1[1]
+		end
+		
+		if pos1[2] < pos2[2] then
+			closest[2] = pos2[2]
+		elseif pos1[2] > pos3[2] then
+			closest[2] = pos3[2]
+		else
+			closest[2] = pos1[2]
+		end
+		
+		if pos1[3] < pos2[3] then
+			closest[3] = pos2[3]
+		elseif pos1[3] > pos3[3] then
+			closest[3] = pos3[3]
+		else
+			closest[3] = pos1[3]
+		end
+		return manhattanDistance(pos1,closest)
+	end
+end
+function chebyshevDistance(pos1,pos2)
+	return math.max(math.max(math.abs(pos1[1]-pos2[1]),math.abs(pos1[2]-pos2[2])),math.abs(pos1[3]-pos2[3]))
+end
+function euclideanDistance(pos1,pos2)
+	return math.pow(pos1[1]-pos2[1],2)+math.pow(pos1[2]-pos2[2],2)+math.pow(pos1[3]-pos2[3],2)
+end
+
+-- A wrapper so it is easier to switch between heuristic functions
+function heuristicDistance(pos1,pos2,pos3)
+
+	return manhattanDistance(pos1,pos2,pos3) --+ chebyshevDistance(pos1[1],pos1[2],pos1[3],pos2[1],pos2[2],pos2[3])
+end
+
+-- This reverse a path, so we can use known paths both ways more easily
+function reversePath(path)
+	local r = {}
+	for k,v in pairs(reverse(path)) do
+		sleep(0)--
+		r[k] = reverseDirs[v]
+	end
+	return r
+end
+
+function isWithin(target,posMin,posMax)
+	if target[1] < posMin[1] or target[1] > posMax[1] or target[2] < posMin[2] or target[2] > posMax[2] or target[3] < posMin[3] or target[3] > posMax[3] then
+		return false
+	end
+	return true
+end
+
+-- Encodes strings to be used as HTTP GET-params in urls.
+-- url_encode from http://lua-users.org/wiki/StringRecipes -- with a few changes
+function urlEncode(str)
+  if (str) then
+    str = string.gsub (str, "\n", " ")
+    str = string.gsub (str, "\t", " ")
+    str = string.gsub (str, "  ", " ")
+    str = string.gsub (str, "  ", " ")
+    str = string.gsub (str, "([^%w %-%_%.%~])",
+        function (c) return string.format ("%%%02X", string.byte(c)) end)
+    str = string.gsub (str, " ", "+")
+  end
+  return str	
+end
+
+
+-- got this somewhere, too lazy
+function openModem()
+	local bOpen, sFreeSide = false, nil
+	for n,sSide in pairs(rs.getSides()) do	
+		if peripheral.getType( sSide ) == "modem" then
+			sFreeSide = sSide
+			if rednet.isOpen( sSide ) then
+				bOpen = true
+				break
+			end
+		end
+	end
+	
+	if not bOpen then
+		if sFreeSide then
+			--print( "No modem active. Opening "..sFreeSide.." modem" )
+			rednet.open( sFreeSide )
+			return true
+		else
+			print("No modem attached!")
+			sleep(1)
+			os.exit()
+			return false
+		end
+	end
+	return true
+end
+
+-- Loads the configuration from disk
+function loadConfig()
+	local file = fs.open(configFile , "r")	
+	if file ~= nil then
+		print("Loading "..fs.getSize(configFile).." bytes of config data...")
+		local config = textutils.unserialize(file.readAll())
+		if config == nil or type(config) ~= "table" then
+			status(-100,"WARN: Could not unserialize config file.")
+			return false
+		end
+		file.close()
+		return config
+	else
+		status(-100,"WARN: Could not read config file.")
+		--print(""..nil)
+		return nil
+	end
+end
+
+-- Write the configuration to disk
+function saveConfig(callDepth,configOverride)
+	if configOverride ~= nil then config = configOverride end
+	callDepth = callDepth or -20
+	status(callDepth,"saving config ... ")
+	--debug(callDepth)
+	local file = fs.open(configFile , "w")
+	if file ~= nil then
+		file.write(textutils.serialize(config))
+		file.close()
+		return true
+	else
+		print("FATAL: Could not write config '"..configFile.."'.")
+		err("FATAL: Could not write config '"..configFile.."'.")
+		--print(""..nil)
+		--quit = true
+		return false
+	end
+end
+
+function numberFormat(num,precision)
+	if precision == nil then precision = 2 end
+	return math.ceil(num * math.pow(10,precision)) / math.pow(10,precision);
+end
+
+function diffRot(a,b)
+	if a > 3 or b > 3 or a < 0 or b < 0 then
+		return 0
+	end
+	local rot = (a - b)
+        if rot > 2 then
+                rot = rot - 4
+        elseif rot < -2 then
+                rot = rot + 4
+        end
+	return math.abs(rot)
+end
+
+function fail()
+	print(""..nil)
+end
+
+-- Returns direction-number from direction-coords
+function getDirection(xDir , yDir , zDir)
+	--if xDir == nil or yDir == nil then
+	--	return -1
+	--end
+	--print("xDir "..textutils.serialize(xDir).." "..type(xDir))
+	--print("yDir "..textutils.serialize(yDir).." "..type(yDir))
+	if yDir > 0 then
+		return 2
+	elseif yDir < 0 then
+		return 0
+	elseif xDir > 0 then
+		return 1
+	elseif xDir < 0 then
+		return 3
+	elseif zDir ~= nil and zDir > 0 then
+		return 4	
+	elseif zDir ~= nil and zDir < 0 then
+		return 5
+	else
+		err("bug: invalid direction "..xDir..","..yDir)
+		return -1
+	end
+end
+
+function log(msg)
+	status(-2,msg)
+end

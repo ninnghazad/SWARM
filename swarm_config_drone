@@ -1,0 +1,23 @@
+{
+  digArea_ignoreSlots = {
+    1,
+    2,
+  },
+  rechargePos = {
+    217,
+    2115,
+    76,
+    4,
+  },
+  jobServerID = 25,
+  storagePos = {
+    217,
+    2115,
+    76,
+    5,
+  },
+  loopJob = false,
+  mapServerID = 26,
+  dropRemainingFuelToStoragePos = true,
+  digArea_dropIgnoreSlots = true,
+}

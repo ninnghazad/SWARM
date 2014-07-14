@@ -1,0 +1,31 @@
+-- SWARM Hard Reboot
+-- Simple tool to send signal to drone(s) to hard-reboot themselfes.
+-- In difference to swarm_reboot, with this drones will just instantly
+-- shut down, without saving or any checks.
+-- If [id] argument is omitted, signal is broadcasted to all drones.
+-- Usage: swarm_hardreboot [id]
+
+print("SWARM Hard Reboot ["..os.getComputerID().."]")
+
+local tArgs = { ... }
+rednet.open("back")
+if #tArgs == 1 then
+	rednet.send(tonumber(tArgs[1]),string.char(130))
+else
+	rednet.broadcast(string.char(130))
+end
+
+print("Waiting for response(s), press Q to quit.")
+local e,msg
+while true do
+	--sleep(0)
+	e = {os.pullEvent()}
+	if e[1] == "key" then -- Handle key-presses
+		if e[2] == 16 then
+			print("Q pressed, quitting...")
+			break
+		end
+	elseif e[1] == "rednet_message" and e[3]:byte(1) == 111 then
+		print(e[2].." is rebooting.")
+	end
+end

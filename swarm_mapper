@@ -1,0 +1,20 @@
+local mapServerID = 43
+rednet.open("back")
+local x,y,z,str
+local map = {}
+while true do
+	x,y,z = gps.locate(1)
+	
+	x = math.floor(x)
+	y = math.floor(y)
+	z = math.floor(z)
+	str = x..","..y..","..z
+	
+	if x ~= nil and map[str] == nil then
+		print("map: "..str)
+		rednet.send(mapServerID,string.char(3)..textutils.serialize({x,y,z,0}))
+		rednet.send(mapServerID,string.char(3)..textutils.serialize({x,y,z-1,0}))
+		map[str] = 1
+	end
+	sleep(0)
+end

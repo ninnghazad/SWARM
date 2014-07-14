@@ -1,0 +1,203 @@
+jobserver = {}
+version = "0.1"
+os.loadAPI("swarm")
+
+startTime = swarm.timestamp()
+label = os.getComputerLabel()
+id = os.getComputerID()
+config = {}
+
+local e,msg,func,job,jobid,status
+lastId = 0
+--local jobs = {}
+jobs = {}
+--local sent = {}
+sent = {}
+--local active = {}
+active = {}
+callDepth = 0
+
+function save(callDepth)
+	callDepth = callDepth + 1
+	config["active"] = active
+	config["jobs"] = jobs
+	config["sent"] = sent
+	config["lastJobID"] = lastId
+	swarm.saveConfig(callDepth,config)
+end
+function load(callDepth)
+	local i,v
+	callDepth = callDepth + 1
+	config = swarm.loadConfig()
+	if config == nil then 
+		return nil
+	end
+	active = config["active"] or {}
+	jobs = config["jobs"] or {} 
+	sent = config["sent"] or {}
+	for i,v in pairs(sent) do
+		jobs[#jobs+1] = v
+		table.remove(sent,i)
+	end
+	sent = {}
+	for i,v in pairs(active) do
+		jobs[#jobs+1] = v
+	end
+	active = {}
+	lastId = config["lastJobID"] or 0
+	return config
+end
+function countArray(array)
+	local i,v
+	local count = 0
+	for i,v in pairs(array) do
+		count = count + 1
+	end
+	return count
+end
+function main()
+	local callDepth = 1
+	swarm.status(-1000,"main() started",true)
+	while true do
+		swarm.status(callDepth,"main routine: jobs: "..countArray(jobs).." active: "..countArray(active).." sent: "..countArray(sent).." finished: "..config["finished"])
+		e = {os.pullEvent("modem_message")}
+	--	if e[3] == 17 then
+	--		print("j: "..#jobs.." s: "..#sent.." a: "..#active)
+	--	end
+		if e[5]["message"]:byte(1) == 20 then -- drone request a job to do
+			--print(textutils.serialize(e[3]).." requests job")
+			if #jobs == 0 then
+			--	print("no jobs in queue, ask me again later")
+				-- No jobs currently, ask me again later.
+				rednet.send(e[4],string.char(21).."nil")
+			else			
+				
+				-- Sent a job to drone to consider
+				job = jobs[1]
+				
+				
+				jobid = lastId
+				lastId = lastId + 1
+				
+				rednet.send(e[4],string.char(21)..textutils.serialize({jobid,job}))
+				sent[jobid] = job
+				table.remove(jobs,1)
+				save(callDepth)
+				print("drone "..e[4].." requested job, suggesting job "..jobid)
+				--return
+			end
+		elseif e[5]["message"]:byte(1) == 22 then -- drone tells us if it will do a job or not
+			msg = textutils.unserialize(string.sub(e[5]["message"],2))
+			jobid = msg[1]
+			--print("response "..textutils.serialize(msg[2]))
+			if not msg[2] then
+				-- drone has denied job
+				jobs[#jobs+1] = sent[jobid]
+				table.remove(sent,jobid)
+				save(callDepth)
+				print("drone "..e[4].." declined job "..jobid)
+			else 
+	--			-- drone has accepted job, yay
+				active[jobid] = sent[jobid]
+				table.remove(sent,jobid)
+				save(callDepth)
+				print("drone "..e[4].." accepted job "..jobid)
+	--			print(textutils.serialize(active))
+			end
+		elseif e[5]["message"]:byte(1) == 24 then -- drone tells us about the status of its job
+			msg = textutils.unserialize(string.sub(e[5]["message"],2))
+			jobid = msg[1]
+			status = msg[2]
+			msg = msg[3]
+			print("drone "..e[4].." reports for job "..jobid..": status: "..status.." msg: "..msg)
+			if status == -1 then
+				table.insert(jobs,active[jobid])
+				table.remove(active,jobid)
+				save(callDepth)
+				print("drone "..e[4].." failed to finish job "..jobid..".")
+			elseif status == -2 then
+				table.remove(active,jobid)
+				save(callDepth)
+				config["finished"] = config["finished"] + 1
+				print("drone "..e[4].." successfully finished job "..jobid..".")
+			end
+		elseif e[5]["message"]:byte(1) == 25 then -- someone sends a new job.
+			msg = textutils.unserialize(string.sub(e[5]["message"],2))
+			if msg ~= nil then
+				local r,error
+				
+				r,error = loadstring(msg[1])
+				if r == nil or type(r) == "table" then
+					rednet.send(e[4],string.char(26)..textutils.serialize({false,error}))
+					print("received BAD new job: "..error)
+				else
+					table.insert(jobs,{0,msg[1]})
+					save(callDepth)
+					rednet.send(e[4],string.char(26)..textutils.serialize({true}))
+					print("received GOOD new job: "..msg[1])
+				end
+			else 
+				print("received NIL job, ignoring")
+			end
+		elseif e[5]["message"]:byte(1) == 100 then -- Status query 
+			rednet.send(e[4],string.char(101).."JOBSERVER "..id.." ["..label.."] jobs: "..countArray(jobs).." active: "..countArray(active).." sent: "..countArray(sent).." finished: "..config["finished"])
+		elseif e[5]["message"]:byte(1) == 110 then -- Reboot signal
+			swarm.status(callDepth,"received reboot signal")
+			save(callDepth)
+			rednet.send(e[4],string.char(111))
+			swarm.status(callDepth,"will now reboot")
+			os.reboot()
+			break
+		elseif e[5]["message"]:byte(1) == 130 then -- Hard reboot signal
+			os.reboot()
+			break
+		elseif e[5]["message"]:byte(1) == 120 then -- Full status query
+			rednet.send(e[4],string.char(121)..textutils.serialize(swarm._status))
+		end
+		
+	end
+end
+
+
+
+--[[
+    The one and only: run()
+--]]
+function run()
+	term.clear()
+	term.setCursorPos(1,1)
+	
+	print("[SWARM jobserver #"..id.."]")
+	swarm.log("[SWARM jobserver #"..id.."]")
+	
+	-- Open modem
+	swarm.openModem()
+	
+	-- Load config or create a default one.
+	load(callDepth)
+	if not config then
+		print("No config found, trying to create one.")
+		config = config or {}
+		config["finished"] = 0
+		save(callDepth)
+		print("Default config created, please change it and reboot.")
+		return
+	end
+
+	-- Get global environment so we can pass it to the job-script
+	env = getfenv()
+		
+	--swarm.wrap(function() print("AHA") return true end,"TEST")
+	swarm.status(0,"starting routines...\n")
+
+	-- Wrappers, to catch errors and stuff
+	function wrapMain() return swarm.wrap(main,"main") end 
+	parallel.waitForAny(wrapMain)
+
+	if quit == true then
+		print("successfully terminated")
+	else
+		swarm.err("abnormal termination of routine")
+	end
+	return
+end

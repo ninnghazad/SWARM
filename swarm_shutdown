@@ -1,0 +1,22 @@
+local tArgs = { ... }
+rednet.open("back")
+if #tArgs == 1 then
+	rednet.send(tonumber(tArgs[1]),string.char(140))
+else
+	rednet.broadcast(string.char(140))
+end
+
+print("Waiting for response(s), press Q to quit.")
+local e,msg
+while true do
+	--sleep(0)
+	e = {os.pullEvent()}
+	if e[1] == "key" then -- Handle key-presses
+		if e[2] == 16 then
+			print("Q pressed, quitting...")
+			break
+		end
+	elseif e[1] == "rednet_message" and e[3]:byte(1) == 141 then
+		print(e[2].." is shuttind down.")
+	end
+end

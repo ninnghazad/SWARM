@@ -1,0 +1,114 @@
+-- SWARM Status Listener
+-- Collects status messages from drones and sends them to webdisplay.
+
+
+infoserver = {}
+version = "0.1"
+os.loadAPI("swarm")
+
+-- Settings:
+local url = "http://dunkelraum.net/share/alphaomega.php"
+
+-- Code:
+function run()
+	print("SWARM infoserver #"..os.getComputerID().."")
+	print("Collects status messages from drones and sends them to webdisplay.")
+	print("Waiting for response(s), press Q to quit.")
+	swarm.openModem()
+	local t = os.startTimer(4)
+	local e,msg,data,r
+	data = {}
+	local str = ""
+	local startTime = os.clock()
+	local lastTime = startTime
+
+	-- Initial request of drone stati
+	rednet.broadcast(string.char(100))
+	rednet.broadcast(string.char(120))
+
+
+
+	-- Event loop, run forever
+	while true do
+		e = {os.pullEvent()}
+		if e[1] == "key" then -- Handle key-presses
+			if e[2] == 16 then
+				print("Q pressed, quitting...")
+				break
+			end
+		elseif e[1] == "timer" and e[2] == t then -- Timed send of data to webserver
+			-- JSON-Encode the data to be send
+			str = "{"
+			for k,v in pairs(data) do
+				str = str.."\""..k.."\": [ "
+				v[1] = string.gsub(v[1],'"',"'")
+				if v ~= nil and v[1] ~= nil and v[2] ~= nil and v[2]["uptime"] ~= nil then
+					str = str.."\""..v[1].." up: "..v[2]["uptime"].."s\","
+				elseif v ~= nil and v[1] ~= nil then
+					str = str.."\""..v[1].." \","
+				end
+				if #v >= 3 then
+					
+					if v[3] ~= nil and type(v[3]) == "table" and #v[3] > 0 then
+						str = str.."{"
+						for i,vv in pairs(v[3]) do
+							--if type(vv) == "string" then
+								vv = string.gsub(vv,'"',"'")
+								str = str.."\""..i.."\":\""..(vv).."\","
+							--end
+						end
+						str = string.sub(str,1,#str-1).."},"
+					end
+					
+				end
+				if #v >= 2 then
+					str = str.."\""..v[2][4].."\","
+				end
+				str = string.sub(str,1,#str-1).."],"
+			end
+			str = string.sub(str,1,#str-1).."}"
+			
+			-- Actually send the data
+			http.post(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
+			
+			-- Request some more status updates from drones in the area
+			rednet.broadcast(string.char(100))
+			rednet.broadcast(string.char(120))
+			
+			-- Restart timer
+			t = os.startTimer(1)
+			
+		elseif e[1] == "rednet_message" and e[3]:byte(1) == 101 then -- Receive current status 
+			if data[e[2]] == nil then
+				data[e[2]] = {}
+			end
+			data[e[2]][1] = string.sub(e[3],2)
+		elseif e[1] == "rednet_message" and e[3]:byte(1) == 121 then -- Receive detailled status
+			if data[e[2]] == nil then
+				data[e[2]] = {}
+			end
+			data[e[2]][3] = textutils.unserialize(string.sub(e[3],2)) -- Receive??? oehm...??? PING?
+		elseif e[1] == "rednet_message" and e[3]:byte(1) == 10 then
+			if data[e[2]] == nil then
+				data[e[2]] = {}
+			end
+			data[e[2]][2] = textutils.unserialize(string.sub(e[3],2))
+		end
+		
+		-- Update local display once a second
+		if (os.clock() - lastTime) > 1.0 then
+			term.setCursorPos(1,1)
+			term.clear()
+			print("SWARM Status Listener ["..os.getComputerID().."] - up: "..(os.clock() - startTime))
+			print("Seen drone ids:")
+			
+			local tmp = {}
+			
+			for k,v in pairs(data) do
+				io.write(k.." ")
+				
+			end	
+			lastTime = os.clock()
+		end
+	end
+end

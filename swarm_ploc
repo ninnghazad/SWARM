@@ -1,0 +1,277 @@
+-- SWARM Pocket Locator - for portable computers
+-- Tool to find a computer or turtle by the wireless-messages it sends.
+
+-- Uses dumb multilateration to find best point from sample positions and their distances
+-- to the receiver.
+
+
+-- Code:
+print("SWARM Pocket Locator ["..os.getComputerID().."]")
+local argv = {...}
+if #argv ~= 1 then	
+	print("Tool to find a computer or turtle by the wireless-messages it sends.")
+	print("Start and run around a bit, tool needs multiple positions to triangulate.")
+	print("NOTE: If the target is moving fast, results will be inaccurate.")
+	print("NOTE: Cannot find targets that do not send wireless messages of any kind.")
+	print("Usage: swarm_ploc [ID]")
+	return
+end
+
+local tid = tonumber(argv[1])
+
+print("Trying to locate "..tid)
+sleep(0)
+rednet.open("back")
+
+function multilateration_esq(points,p)
+	local sum = 0
+	for i = 1,#points,1 do
+		--sleep(0)
+		sum = sum + math.pow((math.pow(p[1]-points[i][1],2)+math.pow(p[2]-points[i][2],2)+math.pow(p[3]-points[i][3],2) - math.pow(points[i][4],2)),1)
+	end
+	return math.abs(sum)
+end
+
+function multilateration_mean(points)
+	local p = {0,0,0}
+	local d = 0
+	for i = 1,#points,1 do
+		p[1] = p[1] + points[i][1]
+		p[2] = p[2] + points[i][2]
+		p[3] = p[3] + points[i][3]
+		d = d + points[i][4]
+	end
+	d = d / #points
+	
+	p[1] = p[1] / #points
+	p[2] = p[2] / #points
+	p[3] = p[3] / #points
+	return p
+end
+
+function multilateration(points)
+	local p = multilateration_mean(points)
+	local e = multilateration_esq(points,p)
+	
+	local ne,np,lp
+	local dx,dy,dz = 1,1,-1
+	local i = 0
+	while e > 0 do
+		--sleep(0)
+		
+		-- X
+		np = {p[1]+dx,p[2],p[3]}
+		ne = multilateration_esq(points,np)
+		if ne > e then
+			dx = dx * -1
+		else
+			p = np
+			e = ne
+		end
+		
+		-- Y
+		np = {p[1],p[2]+dy,p[3]}
+		ne = multilateration_esq(points,np)
+		if ne > e then
+			dy = dy * -1
+		else
+			p = np
+			e = ne
+		end
+		
+		-- Z
+		if dz < 0 and p[3] > 0 or dz > 0 and p[3] < 255 then
+			np = {p[1],p[2],p[3]+dz}
+			ne = multilateration_esq(points,np)
+			if ne > e then
+				dz = dz * -1
+			else
+				p = np
+				e = ne
+			end
+		end
+		
+		
+		if p == lp then
+			i = i + 1
+			if i == 2 then
+				break
+			end
+		else 
+			i = 0
+		end
+		
+		lp = p
+	end
+	return {e,p}
+end
+
+function replacePoint(points,point)
+	for i = 1,#points,1 do
+		if points[i] ~= nil then
+			if math.floor(points[i][1]) == math.floor(point[1]) and math.floor(points[i][2]) == math.floor(point[2]) and math.floor(points[i][3]) == math.floor(point[3]) then
+				points[i] = point
+				return
+			end
+		end
+	end
+	points[#points+1] = point
+	return
+end
+
+local e,pos,r
+
+local points = {}
+
+local line
+local bestPos,bestScore
+local delay
+local bad = 0
+local distance = 0
+while true do
+	e = {os.pullEvent()}
+	if e[1] == "key" then -- Handle key-presses
+		if e[2] == 16 then
+			print("Q pressed, quitting...")
+			break
+		end
+	elseif e[1] == "modem_message" and e[4] == tid then
+		term.clear()
+		term.setCursorPos(1,1)
+		
+		delay = os.clock()
+		pos = {gps.locate(1)}
+		delay = os.clock() - delay
+		
+		if pos == nil then
+			print("Received broadcast, but cannot determine own location, no gps!")
+		else
+			--print(#points.." "..pos[1]..","..pos[2]..","..pos[3].." "..e[6])
+			distance = e[6]
+			replacePoint(points,{pos[1],pos[2],pos[3],e[6],os.clock()})
+			print("SWARM Pocket Locator ["..os.getComputerID().."]")
+			print("Press Q to quit.")
+			print("target: "..tid)
+			print("samples: "..#points)
+			print("bad samples: "..bad)
+			print("gps delay: "..(delay*20).." tics")
+			print("distance: "..distance)
+			
+			if #points >= 4 then
+				
+			
+				
+				if #points >= 4 then
+				--[[	r = multilateration(points)
+				
+					if bestScore == nil or bestScore > r[1]/#points  then 
+						bestPos = r[2]
+						bestScore = r[1] / #points
+					end
+					--]]
+					if bestScore ~= nil and bestScore == 0 then
+						print("Precisely found at "..bestPos[1]..","..bestPos[2]..","..bestPos[3])
+						return
+					else 
+
+						local change = true
+						local tmpPoints = points
+						bad = 0
+						while change and #tmpPoints >= 2 do
+							
+							r = multilateration(tmpPoints)
+							change = false
+							local worst = 0
+							local worstScore = r[1] /#tmpPoints
+							for i = 1,#tmpPoints,1 do
+								local tmp = {}
+								local score,target
+								for j = 1,#tmpPoints,1 do
+									if j ~= i then
+										tmp[#tmp + 1] = tmpPoints[j]
+									end
+								end
+								rr = multilateration(tmp)
+								if (rr[1]/#tmp) < r[1]/#tmpPoints then -- /#tmp /#points
+									if worstScore > rr[1]/#tmp then 
+										worst = i
+										worstScore = rr[1]/ #tmp
+									end
+								end
+							end
+							
+							if worst > 0 then
+								local tmp = {}
+								for j = 1,#tmpPoints,1 do
+									if j ~= worst then
+										tmp[#tmp + 1] = tmpPoints[j]
+									end
+								end
+								change = true
+								tmpPoints = tmp
+								bad = bad + 1
+							end
+							
+						end
+						
+						r = multilateration(tmpPoints)
+				
+						if bestScore == nil or bestScore > r[1]/#tmpPoints  then 
+							bestPos = r[2]
+							bestScore = r[1] / #tmpPoints
+						end
+						print("error: "..bestScore)
+						print("pos: "..bestPos[1]..", "..bestPos[2]..", "..bestPos[3])
+					end
+				end
+			else
+				print("Not enough samples yet ("..#points.."/4)!")
+				print("Move around a bit to gather more.")
+			end
+
+		end
+	end
+end
+
+
+--[[
+	local change = true
+				while change and #points >= 5 do
+					
+					r = multilateration(points)
+					change = false
+					local worst = 0
+					local worstScore = r[1] /#points
+					for i = 1,#points,1 do
+						local tmp = {}
+						local score,target
+						for j = 1,#points,1 do
+							if j ~= i then
+								tmp[#tmp + 1] = points[j]
+							end
+						end
+						rr = multilateration(tmp)
+						if (rr[1]/#tmp)*2 < r[1]/#points then -- /#tmp /#points
+							if worstScore > rr[1]/#tmp then 
+								worst = i
+								worstScore = rr[1]/ #tmp
+							end
+						end
+					end
+					
+					if worst > 0 then
+						local tmp = {}
+						for j = 1,#points,1 do
+							if j ~= worst then
+								tmp[#tmp + 1] = points[j]
+							end
+						end
+						change = true
+						points = tmp
+						bad = bad + 1
+					end
+					if #points <= 4 then 
+						break
+					end
+				end
+--]]

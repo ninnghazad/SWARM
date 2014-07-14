@@ -1,0 +1,64 @@
+print("SWARM Pos. Monitor ["..os.getComputerID().."]")
+
+local argv = {...}
+if #argv ~= 0 then	
+	print("Listens for broadcasts and keeps a table of drone-positions and")
+	print("last-seen times.")
+	print("Usage: swarm_pmon")
+	return
+end
+
+rednet.open("back")
+local e
+local map = {}
+local timer = os.startTimer(1)
+local line
+while true do
+	e = {os.pullEvent()}
+	if e[1] == "key" then -- Handle key-presses
+		if e[2] == 16 then
+			print("Q pressed, quitting...")
+			break
+		end
+	elseif e[1] == "modem_message" then
+		if map[e[4]] == nil then
+			map[e[4]] = {0,0,0,0}
+		end
+		map[e[4]][1] = e[6]
+		map[e[4]][2] = os.clock()
+		
+	  	if e[5]["message"]:byte(1) == 10 then
+			line = e[5]["message"]
+			line = textutils.unserialize(line)
+			map[e[4]][3] = line[1]..","..line[2]..","..line[3]
+			map[e[4]][4] = os.clock()
+		end
+	elseif e[1] == "timer" and e[2] == timer then
+		term.clear()
+		term.setCursorPos(1,1)
+
+		print("SWARM Pos. Monitor ["..os.getComputerID().."]")
+		print("Press Q to quit.")
+		print("#id dist position lastseen")
+		
+		for id,data in pairs(map) do
+			line = "#"..id
+			if os.clock() - data[2] > 4 then
+				line = line.." !"..math.floor(data[1])
+			else
+				line = line.." "..math.floor(data[1])
+			end
+			if os.clock() - data[4] > 4 then
+				line = line.." !"..data[3]
+			else
+				line = line.." "..data[3]
+			end
+			line = line.." "..(os.clock() - data[2])
+			print(line)
+		end
+		timer = os.startTimer(1)
+	else
+--		print("unknown event "..e[1])
+	end
+	
+end

@@ -1,0 +1,33 @@
+-- SWARM Status
+-- Simple tool to send signal to drone(s) to query status report.
+-- If [id] argument is omitted, signal is broadcasted to all drones.
+-- Usage: swarm_status [id]
+
+print("SWARM Status ["..os.getComputerID().."]")
+
+local tArgs = { ... }
+rednet.open("back")
+
+if #tArgs == 1 then
+	rednet.send(tonumber(tArgs[1]),string.char(100))
+else
+	rednet.broadcast(string.char(100))
+end
+
+print("Waiting for response(s), press Q to quit.")
+local e,msg
+while true do
+	--sleep(0)
+	e = {os.pullEvent()}
+	if e[1] == "key" then -- Handle key-presses
+		if e[2] == 16 then
+			print("Q pressed, quitting...")
+			break
+		end
+	elseif e[1] == "rednet_message" and e[3]:byte(1) == 101 then
+		print(e[2]..": "..string.sub(e[3],2))
+		if #tArgs == 1 then
+			return
+		end
+	end
+end

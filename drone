@@ -1,0 +1,1869 @@
+-- libdrone
+
+-- if digArea is digging a 2 high area, the drone should traverse on the upper layer, right
+-- now it will traverse the lower layer digging upwards - this is bad for farming, ie sugar canes
+-- which will break of and drop if the middle part is dug before the top part.
+
+drone = {}
+version = "0.1"
+os.loadAPI("swarm")
+
+DRONE_MAP_CACHE_TIMEOUT = 12000
+DRONE_LONGLOOP_YIELD_COUNT = 100
+quit = false
+abort = false
+unloaded = 0
+collected = 0
+pos = {0,0,0}
+xDir,yDir,zDir = 0,-1,0
+
+startTime = swarm.timestamp()
+label = os.getComputerLabel()
+id = os.getComputerID()
+
+navmap = map.new()
+dronePositions = {}
+paths = {}
+fuelLevel = -1
+fuelLimit = -1
+config = {}
+counters = {0,0,0,0}
+
+-- Some defaults for the config
+-- You may want to adjust the default mapServerID
+-- TODO: use default.config file instead
+config["mapServerID"] = 43
+config["homePos"] =	{6,6,6,0}
+config["storagePos"] =	{6,6,6,1}
+config["jobPos"] =	{6,6,6,2}
+
+
+-- Menu vars
+local selected = 1
+local actions = {"abort","home","unload","recharge"}
+	
+local useMinyMod = false
+local miny = false
+
+function navmap:set2(x,y,z,v)
+	-- Send message of type 3 (set worldmap value) to mapserver
+	rednet.send(config["mapServerID"],string.char(3)..textutils.serialize({x,y,z,v}))
+	-- Set value in local cache with current timestamp
+	navmap:set(x,y,z,{swarm.timestamp(),{v,1}})	
+end
+
+function navmap:get2(x,y,z,cacheonly,callDepth)
+	callDepth = callDepth or -11
+	
+	cacheonly = cacheonly or false
+	
+	-- Check local cache if we have a recent entry
+	local v = navmap:get(x,y,z)
+	if v ~= nil and v[1] ~= nil then 
+		-- Check if age is below timelimit
+		if swarm.timestamp() - v[1] <= DRONE_MAP_CACHE_TIMEOUT then
+			-- Cache hit, return value
+			counters[1] = counters[1] + 1
+			return v[2]
+		end
+		--TODO: Clear values to save mem in case of worldMap reset while drone is running?
+		--navmap:set(x,y,z,nil)
+		v = v[2]
+	end
+	if cacheonly then
+		return v
+	end
+
+	-- Cache miss, request value from mapserver.
+	counters[4] = counters[4] + 1
+	
+	local id,msg,dist 
+	local repeats = 0
+	
+	-- Prepare query of type 1 (get value from worldmap)
+	local request = string.char(1).."{"..x..","..y..","..z.."}"
+	
+	
+	-- Send query to mapserver
+	-- rednet.send(config["mapServerID"],request,true)
+--	if not peripheral.call("right","isOpen",config["mapServerID"]) then
+--		peripheral.call("right","open",config["mapServerID"])
+--	end
+--	if peripheral.call("right","isOpen",65535) then
+--		peripheral.call("right","close",65535)
+--	end
+--	log("request\n")
+--	peripheral.call("right", "transmit", config["mapServerID"], id, request)
+
+	rednet.send(config["mapServerID"],request)
+
+	local event,side,id,rid,msg,info,dist 
+	local timeout = os.startTimer(4)
+	-- Wait for response
+	while true do
+		if repeats > 0 then
+			swarm.status(callDepth,"waiting for response from mapserver "..config["mapServerID"].." [repeat: "..repeats.."]")
+			
+			if repeats > 10 then
+				return v
+			end
+		end
+
+		local e = {os.pullEvent()}
+		if e[1] == "timer" and e[2] == timeout then
+			-- Resend request
+			rednet.send(config["mapServerID"],request)
+			timeout = os.startTimer(4)
+			-- Keep trying forever
+			repeats = repeats + 1
+		elseif e[1] == "modem_message" then
+			id = e[3]
+			msg = e[5]["message"]
+			if e[4] == config["mapServerID"] and e[3] == id and msg:byte(1) == 2 then
+				v = textutils.unserialize(string.sub(msg,2))
+				
+				if v ~= nil and type(v) == "table" then
+					counters[2] = counters[2] + 1
+				end
+				
+				navmap:set(x,y,z,{swarm.timestamp(),v})
+				
+				counters[3] = counters[3] + 1
+				return v
+			else
+				-- check another response
+			end
+			
+			
+		end
+	end
+	return v
+
+end
+
+function navmap:bufferArea(callDepth,minX,minY,minZ,maxX,maxY,maxZ)
+	swarm.status(callDepth,"buffering mapdata ...")
+	if maxY == nil then
+		local range  = maxX
+		maxX = minX+range
+		maxY = minY+range
+		maxZ = minZ+range
+		minX = minX-range
+		minY = minY-range
+		minZ = minZ-range
+	end
+	local data = nil
+	local id,msg,dist  = 0,string.char(4)..textutils.serialize({{minX,minY,minZ},{maxX,maxY,maxZ}}),0
+	
+	-- Send query to mapserver
+	rednet.send(config["mapServerID"],msg)
+	
+	-- Wait for response
+	while true do
+		id,msg,dist = rednet.receive(120)
+		if id == nil then
+			log("error: no signal from mapserver")
+			break
+		end
+		if string.byte(msg) == 5 and id == config["mapServerID"] then
+			data = textutils.unserialize(string.sub(msg,2))
+			break
+		end
+	end
+	if data ~= nil then
+		for k,v in pairs(data) do
+			--sleep(0) -- MARKMARK--
+			navmap:set(v[1],v[2],v[3],{swarm.timestamp(),v[4]})	
+		end
+	end
+	return v
+end
+
+
+-- Simple wrapper for turtle function so we remember our direction
+function turnLeft()
+	turtle.turnLeft()
+	xDir, yDir = -yDir, xDir
+end
+
+-- Simple wrapper for turtle function so we remember our direction
+function turnRight()
+	turtle.turnRight()
+	xDir, yDir = yDir, -xDir
+end
+
+function getFuelLevel()
+	return turtle.getFuelLevel()
+end
+
+function getFuelLimit()
+	return turtle.getFuelLimit()
+end
+
+
+function calibrateSub(callDepth,turns)
+	callDepth = callDepth or -23
+	x,y,z = gps.locate(1)
+	
+	while x == nil or (x==0 and y==0 and z==0) do
+		swarm.status(callDepth,"orienting: no gps signal! A",true)
+		
+		print("no gps - cannot calibrate\n")
+		x,y,z = gps.locate(1,true)
+		sleep(1)
+	end
+	local xPos,yPos,zPos = 0,0,0
+	local up = true
+	if not turtle.forward() then
+		-- maybe no fuel!
+		if x ~= nil then -- we have gps?!
+			if turtle.getFuelLevel() == 0 then
+				swarm.status(callDepth,"orienting: out of fuel, trying to refuel...",true)
+				swarm.status(callDepth,"refueled "..consumeAllFuel(callDepth+1).." fuels.",true)
+				
+				if turtle.getFuelLevel() == 0 then
+					swarm.status(callDepth,"orienting: out of fuel at "..x..","..y..","..z.." - NEED HELP!")
+					return -2
+				end
+				sleep(1)
+			end
+			--recharge()
+		end
+		--log("no fuel?")
+		return -1
+	else
+		xPos,yPos,zPos = gps.locate(1)
+		while xPos == nil or xPos == math.nan do
+			if xPos == math.nan then
+				swarm.status(callDepth,"orienting: faulty gps signal, not enough stations!")
+				log(swarm.__status.."\n")
+			else
+				swarm.status(callDepth,"orienting: no gps signal! B")
+				log(swarm.__status.."\n")
+			end
+			xPos,yPos,zPos = gps.locate(4,true)
+			sleep(1)
+		end
+		print("gps: "..xPos..","..yPos..","..zPos)
+		turtle.back()
+	end
+
+	if x == nil or xPos == nil then
+		return -2
+	end
+	pos[1] = x
+	pos[2] = y
+	pos[3] = z
+	if xPos == pos[1] and yPos == pos[2] and zPos == pos[3] then
+		return -1
+	end
+	
+	xDir = xPos - pos[1]
+	yDir = yPos - pos[2]
+	zDir = 0 --zPos - pos[3]
+	--print("get direction "..xDir.." "..yDir.." "..xPos.." "..yPos)
+	local dir = swarm.getDirection(xDir,yDir,zDir) - turns
+	if dir > 3 then dir = dir - 4 end
+	if dir < 0 then dir = dir + 4 end
+	turnRot(dir)
+	
+	-- Broadcast our current position
+	-- rednet.broadcast(string.char(10)..textutils.serialize({pos[1],pos[2],pos[3],swarm.status}))
+	
+	return 1
+end
+
+-- Orients the turtle in GPS-space and determines current direction
+function calibrate(callDepth)
+	callDepth = -1
+	local m = 0 -- calibrateSub(callDepth+1,0)
+	local turns = 0
+	local up = true
+	local back = ""
+	while m ~= 1 do
+		if m == -2 then
+			swarm.status(callDepth,"orienting: no gps signal, waiting!")
+			sleep(4)
+		elseif m == -3 then
+			swarm.status(callDepth,"orienting: no fuel, waiting")
+			sleep(4)
+		else
+			swarm.status(callDepth,"orienting: got gps, trying")
+			
+			if turns < 4 then
+				turtle.turnRight()
+				turns = turns + 1
+				
+			else
+				turns = 0
+				if up then
+					if not turtle.up() then
+						up = false
+					end
+				else
+					if not turtle.down() then
+						swarm.status(callDepth,"orienting: stuck @ "..x..","..y..","..z.." - NEED HELP!")
+						up = true
+					end
+				end
+			end
+		end
+		m = calibrateSub(callDepth+1,turns)
+		--sleep(0) -- MARKMARK
+	end
+	
+	
+	-- check position
+	if not checkPositionAgainstGPS() then
+		swarm.status(callDepth,"failed to calibrate itself")
+		sleep(30)
+		return false
+	end
+	swarm.status(callDepth,"has calibrated itself @ "..textutils.serialize({pos[1],pos[2],pos[3]}))
+	return true
+end
+
+
+function turnDir(newXDir,newYDir)
+	
+	if xDir == newXDir and yDir == newYDir then
+		return
+	end
+	local rot = (swarm.getDirection(xDir,yDir,0) - swarm.getDirection(newXDir,newYDir,0))
+	-- Make sure we use the shortest direction to get where we want
+	if rot > 2 then
+		rot = rot - 4
+	elseif rot < -2 then
+		rot = rot + 4
+	end
+	while rot ~= 0 do
+		if rot < 0 then
+			turnRight()
+			rot = rot + 1
+		end
+		if rot > 0 then
+			turtle.turnLeft()
+			rot = rot - 1
+		end
+	end
+	xDir = newXDir
+	yDir = newYDir
+end
+
+function turnRot(dir)
+	if dir < 0 then
+		err("BUG: turnRot < 0")
+	end
+	if dir < 4 then
+		turnDir(swarm.xDirs[dir],swarm.yDirs[dir],0)
+	end
+end
+
+-- Tries to move a single step in the specified direction
+function goDir(dir)
+	if dir == 5 then
+		return turtle.down()
+	elseif dir == 4 then
+		return turtle.up()
+	else
+		turnRot(dir)
+		return turtle.forward()	
+	end
+end
+
+function dropDir(dir,count)
+	count = count or 64
+	if dir == 5 then
+		return turtle.dropDown(count)
+	elseif dir == 4 then
+		return turtle.dropUp(count)
+	else
+		turnRot(dir)
+		return turtle.drop(count)	
+	end
+end
+
+-- Performs a single detect in the specified direction
+function detectDir(dir,callDepth)
+	--print("CHECK1")
+	-- Check if some other turtle is in that direction
+	local target = {pos[1]+swarm.xDirs[dir],pos[2]+swarm.yDirs[dir],pos[3]+swarm.zDirs[dir]}
+	
+	if isOtherDroneAtPos(target) then
+		swarm.status(callDepth,"detected other turtle at "..textutils.serialize(target))
+ 		return -1
+ 	end
+ 	
+	if dir == 5 then
+		return turtle.detectDown() and 1 or 0
+	elseif dir == 4 then
+		return turtle.detectUp() and 1 or 0
+	else
+		turnRot(dir)
+		return turtle.detect() and 1 or 0
+	end
+end
+
+-- Performs a single attack in the specified direction
+function attackDir(dir)
+
+	if dir == 5 then
+		return turtle.attackDown()
+	elseif dir == 4 then
+		return turtle.attackUp()
+	else
+		turnRot(dir)
+		return turtle.attack()	
+	end
+end
+
+
+-- Performs a single dig in the specified direction
+function digDir(dir)
+	if dir == 5 then
+		return turtle.digDown()
+	elseif dir == 4 then
+		return turtle.digUp()
+	else
+		turnRot(dir)
+		return turtle.dig()	
+	end
+end
+
+function digDirMiny(dir)
+	if dir == 5 then
+		return miny.digDown()
+	elseif dir == 4 then
+		return miny.digUp()
+	else
+		turnRot(dir)
+		return miny.dig()	
+	end
+end
+
+-- Performs a single suck in the specified direction
+function suckDir(dir)
+	if dir == 5 then
+		return turtle.suckDown()
+	elseif dir == 4 then
+		return turtle.suckUp()
+	else
+		turnRot(dir)
+		return turtle.suck()
+	end
+end
+
+-- Sucks in each direction
+function suckAll()
+	local r = false
+	for i = 0,5,1 do
+		if suckDir(i) then
+			r = true
+		end
+	end
+end
+
+-- Compare selected slot with block in the specified direction
+function compareDir(dir)
+	if dir == 5 then
+		return turtle.compareDown()
+	elseif dir == 4 then
+		return turtle.compareUp()
+	else
+		turnRot(dir)
+		return turtle.compare()
+	end
+end
+
+
+-- Broadcast our current position and status
+function broadcast()
+	local msg
+	navmap:set(pos[1],pos[2],pos[3],{swarm.timestamp(),{0,1}})
+	msg = "{"..(pos[1])..","..(pos[2])..","..(pos[3])..","..(string.format("%q",swarm.__status))..',["unloaded"]='..(unloaded)..',["uptime"]='..((swarm.timestamp()-startTime)/20).."}"
+	rednet.broadcast(string.char(10)..msg)
+	os.setComputerLabel("drone "..id..": hello there!")
+	--print(textutils.serialize(_status))
+	return true
+end
+
+-- Try to move towards the specified direction, detecting and attacking 
+-- when we hit an obstacle. Stores obstacles in the worldMap.
+function go(dir,callDepth)
+	if turtle.getFuelLevel() <= 1 then
+		swarm.status(callDepth,"Out of fuel while moving! Trying to refuel on the go.")
+		while not consumeAllFuel(callDepth+1) > 0 do
+			swarm.status(callDepth,"Out of fuel while moving! Give me fuel!")
+		end
+	end
+	local counter = 0
+	local d = 0
+	local i = 0
+	while not goDir(dir) do
+		sleep(0) -- MARKMARK--
+		d = detectDir(dir,callDepth+1)
+		if d == 1 then -- Could not go there, because a block is blocking our spot
+			swarm.status(callDepth,"Cannot go there: blocked.")
+			navmap:set2(pos[1]+swarm.xDirs[dir],pos[2]+swarm.yDirs[dir],pos[3]+swarm.zDirs[dir],1)
+			return 0
+		elseif d == 0 then
+			swarm.status(callDepth,"Cannot go there: mob or player.")
+			swarm.status(callDepth,"path blocked by mob or player, trying to kill it!")
+			attackDir(dir)
+		elseif d == -1 then
+			swarm.status(callDepth,"Cannot go there: other drone.")
+			swarm.status(callDepth,"path blocked by other drone!")
+			return -2
+		--	sleep(1)
+			-- do not attack other drones
+		end
+		counter = counter + 1
+		if counter > 4 then
+			if d == 0 then
+				swarm.status(callDepth,"path blocked by mob or player!")
+				return -1
+			elseif d == -1 then
+				swarm.status(callDepth,"path blocked by other drone!")
+				return -2
+			end
+			
+		end
+		
+		swarm.status(callDepth+1,"loop: "..textutils.serialize(i))
+		i = i + 1 
+	end
+	swarm.status(callDepth,"go: ok")
+	pos[1] = pos[1] + swarm.xDirs[dir]
+	pos[2] = pos[2] + swarm.yDirs[dir]
+	pos[3] = pos[3] + swarm.zDirs[dir]
+	
+	broadcast()
+	--sleep(0) -- MARKMARK--
+	return 1
+end
+
+
+--[[
+	go()/goPath() return values:
+	1	OK, target reached
+	0	Detected wall, cannot go there
+	-1	Mob or Player
+	-2	Other drone
+]]--
+goProblems = {[1]="OK - target reached",[0]="FAILURE - detected wall",[-1]="FAILURE - blocked by mob or player",[-2]="FAILURE - blocked by other drone"}
+-- Try to move along a known path
+function goPath(path,callDepth)
+	-- We already are where we wanted to go, nothing to do here
+	if #path == 0 then
+		return 1
+	end
+	local r
+		
+	-- Follow the yellow brick road
+	for i=#path,1,-1 do
+		
+		if i % DRONE_LONGLOOP_YIELD_COUNT == 0 then sleep(0) end -- MARKMARK--
+		if #path > 1 then swarm.status(callDepth,"following path, step "..i.." / "..#path) end
+		r = go(path[i],callDepth+1)
+		if r ~= 1 then
+			swarm.status(callDepth,"could not follow path at step "..i.." / "..#path..", reason: "..goProblems[r])
+			local npos = {pos[1],pos[2],pos[3]}
+			npos[1] = npos[1] + swarm.xDirs[path[i]]
+			npos[2] = npos[2] + swarm.yDirs[path[i]]
+			npos[3] = npos[3] + swarm.zDirs[path[i]]
+			return r,npos
+		end
+	--	print("ok")
+	end
+	swarm.status(callDepth,"followed path of length "..#path)
+	
+	return 1
+end
+
+
+
+-- This checks the table of drone-positions for any drones
+-- at the specified position.
+function isOtherDroneAtPos(xx,yy,zz)
+	local x,y,z
+	
+	if yy == nil then
+		x,y,z = xx[1],xx[2],xx[3]
+	else 
+		x = xx
+		y = yy
+		z = zz
+	end
+	for k,v in pairs(dronePositions) do
+		--sleep(0) -- MARKMARK--
+		if v[1] == x and v[2] == y and v[3] == z then
+			return true
+		end
+	end
+	return false
+end
+
+
+function quickPath(target)
+	local dir = -1
+	local path = {}
+	local tmpPos = {pos[1],pos[2],pos[3]} -- copy
+	while tmpPos[1] ~= target[1] or tmpPos[2] ~= target[2] or tmpPos[3] ~= target[3] do
+		swarm.status(callDepth,"calculating direct path: "..#path)
+		--sleep(0) -- MARKMARK--
+		dir = lookAtDir(target,tmpPos)
+		if dir < 0 then return path end
+		path[#path+1] = dir
+		tmpPos[1] = tmpPos[1] + swarm.xDirs[dir]
+		tmpPos[2] = tmpPos[2] + swarm.yDirs[dir]
+		tmpPos[3] = tmpPos[3] + swarm.zDirs[dir]
+	end
+	return path
+end
+
+-- Compare current position to valid GPS position and warn if
+-- there is a difference. If so this either means a bug, or
+-- your GPS is faulty or out of range.
+function checkPositionAgainstGPS()
+	local x,y,z = gps.locate(30)
+	if x~= nil and (pos[1] ~= x or pos[1] ~= x or pos[1] ~= x) then
+		print("WARNING: Position not synced anymore!")
+		print("GPS: "..x..","..y..","..z)
+		print("LOCAL: "..pos[1]..","..pos[2]..","..pos[3])
+		sleep(3600)
+		print(""..nil)
+		return false
+	elseif x== nil then
+		print("WARNING: No connection to gps!")
+	end
+	return true
+end
+
+
+function findPath(target,callDepth)
+	local posMin,posMax,isArea
+	posMin = target
+	posMax = {}
+	if target[6] ~= nil then
+		posMax[1] = target[4]
+		posMax[2] = target[5]
+		posMax[3] = target[6]
+		isArea = true
+	else
+		posMax = target
+		isArea = false
+	end
+	
+	swarm.status(callDepth,"findPath() 0 area:"..textutils.serialize(isArea).." "..textutils.serialize({target,posMin,posMax}))
+	-- Already at target position?
+	if swarm.isWithin(pos,posMin,posMax) then
+		return {}
+	end
+	
+	swarm.status(callDepth,"findPath() 0.1 "..textutils.serialize(pos))
+	--[[
+	-- Check if we already have a calculated path cached.
+	local path = paths[textutils.serialize({pos[1],pos[2],pos[3],xPos,yPos,zPos})]
+	if path ~= nil then
+		swarm.status(callDepth,("debug: using cached path"))
+		return path
+	else
+		path = {}
+	end
+	--]]
+	
+	local outer,inner = 0,0
+	local tscore = 0
+	local distance = swarm.manhattanDistance(pos,posMin,posMax)
+	local maxModifier = 16
+	local minModifier = 0.1
+	local modifier = math.min(maxModifier,(distance / 10) + minModifier)
+	swarm.status(callDepth,"findPath() 1 "..target[1]..","..target[2]..","..target[3].." distance: "..distance)
+	
+	local temporaryBlocked = {}
+	while not swarm.isWithin(pos,posMin,posMax) do
+		-- sleep(0) -- MARKMARK--
+		--checkPositionAgainstGPS()
+		outer = outer + 1
+		
+	
+		local buffer = map.new()
+			
+	--	local closed = map.new()
+		local queue = heap:new()
+	
+		local path,current,score
+		local x,y,z,d,dist,v,m = 0,0,0,0,0,0,0
+		
+		local qe = false
+		local xTarget,yTarget,zTarget = pos[1],pos[2],pos[3]
+		
+		buffer:set(xTarget,yTarget,zTarget,{-1,0})
+		current = {xTarget,yTarget,zTarget,-1,0,0}
+		queue:insert(tscore,current)
+
+	--	for d=0,5,1 do navmap:set2(pos[1]+swarm.xDirs[d],pos[2]+swarm.yDirs[d],pos[3]+swarm.zDirs[d],detectDir(d)) end
+		
+		swarm.status(callDepth+1,("outerloop 1 "..outer))
+		while not queue:empty() and not swarm.isWithin(current,posMin,posMax) do
+			if inner % DRONE_LONGLOOP_YIELD_COUNT == 0 then sleep(0) end -- MARKMARK--
+			--checkPositionAgainstGPS()
+			inner = inner + 1
+			score,current = queue:pop()
+			v = navmap:get2(current[1],current[2],current[3],false,callDepth+3)
+			--closed:set(current[1],current[2],current[3],1)
+			--print(textutils.serialize(v))
+			--if inner % 100 == 1 then  -- less load
+				swarm.status(callDepth+2,"innerloop 2 "..inner.." ("..(inner/outer)..") c=".. current[1]..","..current[2]..","..current[3].." dir="..current[4].." dist="..current[5].." score="..score.." q=".. queue:getSize())
+			--end
+			if v ~= nil and v[1] == 0 then -- We think this spot is open, no need to actually go there
+				if isOtherDroneAtPos(current[1],current[2],current[3]) then
+					local waited = 0
+					if swarm.isWithin(current,posMin,posMax)  then
+						while isOtherDroneAtPos(current[1],current[2],current[3]) do
+							swarm.status(callDepth+3,"other drone at target, waiting. (score: "..(tscore+modifier)..", waited: "..waited..")")
+							sleep(1)
+							waited = waited + 1
+							if waited > 10 then 
+								break
+							end
+						
+						end
+						-- We have waited quite a while, lets go on
+					end
+					
+					-- Node is blocked, reinsert it to be looked at at a later time
+					queue:insert((score+modifier),current)
+				else
+					for d=0,5,1 do
+						if d ~= current[4] then -- skip direction we came from
+							----sleep(0) -- MARKMARK--
+							xTarget,yTarget,zTarget = (current[1]+swarm.xDirs[d]), (current[2]+swarm.yDirs[d]), (current[3]+swarm.zDirs[d])
+							--print(xTarget..","..yTarget..","..zTarget)
+							m = buffer:get(xTarget,yTarget,zTarget)
+							
+							if m == nil or m[2] > current[5]+1+(swarm.diffRot(swarm.reverseDirs[current[4]],d)/4) then -- was > before
+							--	if swarm.diffRot(swarm.reverseDirs[current[4]],d) > 0 then swarm.status(-200,swarm.diffRot(swarm.reverseDirs[current[4]],d).." "..swarm.reverseDirs[current[4]].." "..d,true) end
+								
+								
+								best = {xTarget,yTarget,zTarget,swarm.reverseDirs[d],current[5]+1+(swarm.diffRot(swarm.reverseDirs[current[4]],d)/4),0}
+								buffer:set(best[1],best[2],best[3],{best[4],best[5]})
+								if m == nil then 
+									-- A*
+									--score = swarm.diffRot(swarm.reverseDirs[current[4]],d) + (swarm.heuristicDistance(xPos,yPos,zPos,xTarget,yTarget,zTarget)+swarm.heuristicDistance(pos[1],pos[2],pos[3],xTarget,yTarget,zTarget))
+									
+									-- Best-First
+									score = (swarm.diffRot(swarm.reverseDirs[current[4]],d)/4) + swarm.heuristicDistance({xTarget,yTarget,zTarget},posMin,posMax) + (1/zTarget)
+									if d == 5 then 
+										score = score + 0.5 -- decrease priority for going down -- was 0.5 before
+									elseif d == 4 then 
+										--score = score + .5 -- decrease priority for going up a little, we prefer higher paths over lower paths
+									end 
+									
+									if temporaryBlocked[textutils.serialize({best[1],best[2],best[3]})] ~= nil then
+										score = score + temporaryBlocked[textutils.serialize({best[1],best[2],best[3]})]
+									end
+									--local r = closed:get(xTarget,yTarget,zTarget)
+									--if r == nil or r > score then
+										queue:insert(score,best)
+									--	closed:set(xTarget,yTarget,zTarget,score)
+									--end
+								end
+							end
+						end
+						
+					end
+				end
+			elseif v ~= nil and v[1] == 1 then
+				--swarm.status(-31,"wall at"..textutils.serialize(current))
+			--	print("wall")
+				-- wall
+			else
+				-- don't immediately explore unknown nodes, prefer known paths
+				if current[6] == 0 then
+					current[6] = 1
+					queue:insert(score+modifier,current) -- increase score to be revisited later on
+				else		
+					--swarm.status(-31,"explore at"..textutils.serialize(current))
+					-- need to physically explore spot
+				--	print("explore")
+					break
+				end	
+			end
+			if queue:empty() then
+				swarm.status(-21,"queue empty??? at"..os.clock())
+				qe = true
+				break
+			end
+		end
+		if not qe then
+			--swarm.status(callDepth+1,("outerloop 2"),true)
+			
+			if swarm.isWithin(pos,posMin,posMax) then
+				swarm.status(callDepth+1,("reached target?!"))
+				break
+			end
+			--if xPos == current[1] and yPos == current[2] and zPos == current[3] then
+			swarm.status(callDepth+1,("exploring target:"..textutils.serialize(current)))
+		--	queue = nil
+			local i = 1
+			local rDir = current[4]
+			local tmp = current
+			local path = {swarm.reverseDirs[rDir]}
+			path = {}
+			while tmp[1] ~= pos[1] or tmp[2] ~= pos[2] or tmp[3] ~= pos[3] do
+				swarm.status(callDepth+2,"found target, reconstructing path "..i.." "..rDir)
+			
+				--sleep(0) -- MARKMARK--
+				
+				tmp[1] = tmp[1] + swarm.xDirs[rDir]
+				tmp[2] = tmp[2] + swarm.yDirs[rDir]
+				tmp[3] = tmp[3] + swarm.zDirs[rDir]
+				
+				path[i] = swarm.reverseDirs[rDir] --{xTarget,yTarget,zTarget}
+				
+				if not (tmp[1] ~= pos[1] or tmp[2] ~= pos[2] or tmp[3] ~= pos[3]) then
+					break
+				end
+				m = buffer:get(tmp[1],tmp[2],tmp[3])
+				rDir = m[1]
+				i = i+1
+			end
+			
+			sleep(0)
+			
+			swarm.status(callDepth+2,"found target, reversing path "..i.." "..rDir)
+			-- Reverse table but not directions -- I change the goPath to read paths from the back, not intuitive, but we save the reversing.
+			--path = swarm.reverse(path)
+			
+			swarm.status(callDepth+2,"found target, walking path "..i.." "..rDir)
+			r,npos = goPath(path,callDepth+3)
+			if r ~= 1 then -- Could not get there - what if because of wall? no, cannot be because of wall, only if it was just built
+				local id = textutils.serialize(npos)
+				if swarm.compare(posMin,posMax) and swarm.compare(npos,posMin) then
+					
+					swarm.status(-200,"blocklist: our only target is blocked! not listing it!")
+					
+				else
+					if temporaryBlocked[id] == nil then temporaryBlocked[id] = 0 end
+					temporaryBlocked[id] = temporaryBlocked[id] + modifier
+					swarm.status(-200,"blocklist: "..temporaryBlocked[id].." "..textutils.serialize(npos))
+				end
+				--queue:insert(score+modifier,npos) -- increase score to be revisited later on
+			else
+				distance = swarm.manhattanDistance(pos,posMin,posMax)
+				modifier = math.min(maxModifier,(distance / 10) + minModifier)
+			end
+			
+			--sleep(0) -- MARKMARK--
+			
+			swarm.status(-20,"walked path: "..goProblems[r].." "..swarm.timestamp())
+		end
+		
+	end
+	
+end
+
+
+-- This will unload all items either to an inventory in front of the turtle,
+-- or drop them to the ground if cannot find or access the inventory.
+-- ME-Terms do not work as inventories for turtles.
+function unload(callDepth,dir)
+	--dir = dir or 
+	swarm.status(callDepth,"unloading items")
+	
+	local r = false
+	local count = 0
+	for n=1,16,1 do
+		count = turtle.getItemCount(n)
+		if config["digArea_ignoreSlots"] ~= nil then
+			for i = 1,#config["digArea_ignoreSlots"],1 do
+				if config["digArea_ignoreSlots"][i] == n then
+					count = 0
+					break
+				end
+			end
+		end
+		
+		if count > 0 then
+			turtle.select(n)
+			-- should not be possible,but i just had a 68 stack, which will produce errors
+			if dropDir(dir,math.min(64,count)) then
+				unloaded = unloaded + count
+			elseif count > 0 then
+				swarm.status(-2,"could not drop "..count.." item(s), maybe target inventory full?")
+			end
+		end
+	end
+	
+	--TODO: Should we try to pickup items that may have fell to the ground here?
+	
+	--turtle.select(1)
+end
+
+-- Our high-level movement function. Use this to move using all the
+-- pathfinding-goodness.
+function moveTo(target,retries,callDepth)
+	retries = retries or -1
+	if target == nil then
+		print("bug: moveTo: pos is nil.")
+		print(""..nil)
+	end
+	
+	swarm.status(callDepth,"move to "..target[1]..","..target[2]..","..target[3].." ["..(#target).."] - "..retries.." retries.")
+	
+	local r = findPath(target,callDepth+1)
+	while not r and (retries < 0 or retries > 0) do
+		--sleep(0) -- MARKMARK--
+		--swarm.status = "could not reach "..posName.." and trying again, reason: "..goProblems[r]
+		r = moveTo(target,0,callDepth+1)
+		retries = retries - 1
+	end
+	
+	if r then
+		-- Only rotate to the specified direction if 
+		-- we have moved successfully
+		if target[4] ~= nil and target[5] == nil then
+			turnRot(target[4])
+		elseif target[7] ~= nil then
+			turnRot(target[7])
+		end
+		--swarm.status = "reached "..posName.."!"
+	else 
+		--swarm.status = "could not reach "..posName.." and stopped trying, reason: "..goProblems[r]
+	end
+	
+	return r
+end
+
+-- Our top-level movement function. Tries to move to a named position.
+function moveToPos(targetName,retries,callDepth)
+	retries = retries or -1
+	callDepth = callDepth or -1
+	swarm.status(callDepth,"move to "..targetName.." - "..retries.." retries.")
+
+	return moveTo(config[targetName],retries,callDepth+1)
+end
+
+
+-- Rotate to face a position
+function lookAtDir(target,origin) 
+	if origin == nil then
+		origin = pos
+	end
+	local dir = {target[1] - origin[1],target[2] - origin[2],target[3] - origin[3]}
+	--local dir = {pos[1] - target[1],pos[2] - target[2],pos[3] - target[3]}
+	
+	local adir = {math.abs(dir[1]),math.abs(dir[2]),math.abs(dir[3])}
+	if adir[1] > adir[2] then adir[2] = 0 else adir[1] = 0 end
+	if adir[1] > adir[3] then adir[3] = 0 else adir[1] = 0 end
+	if adir[2] > adir[3] then adir[3] = 0 else adir[2] = 0 end
+	
+	if adir[3] ~= 0 then
+		dir[3] = math.max(-1,math.min(1,dir[3]))
+		dir[2] = 0
+		dir[1] = 0
+	elseif adir[2] ~= 0 then
+		dir[2] = math.max(-1,math.min(1,dir[2]))
+		dir[1] = 0
+		dir[3] = 0
+	else
+		dir[1] = math.max(-1,math.min(1,dir[1]))
+		dir[2] = 0
+		dir[3] = 0
+	end
+	
+	if dir[1] == 0 and dir[2] == 0 and dir[3] == 0 then
+		dir[2] = -1
+		swarm.status(-100,"bug: looking at current position, no valid direction possible! "..textutils.serialize(odir)..textutils.serialize(dir)..textutils.serialize(adir)..textutils.serialize({pos[1],pos[2],pos[3]})..textutils.serialize(target))
+	end
+	return swarm.getDirection(dir[1],dir[2],dir[3])
+end
+
+-- If we have more than 15 stacks, we consider the turtle stuffed.
+-- If we return only when really full, a lot of stuff will be missed.
+-- Lets say you have 16 half-full stacks of cobble and come along some diamond...
+function needToUnload()
+	local stacks = 0
+	local count = 0
+	for i= 16,1,-1 do
+		if turtle.getItemCount(i) > 0 then
+			stacks = stacks + 1
+		else return false
+		end
+	end
+	if stacks >= 16 then
+		-- if dropIgnoreSlots is set, we will drop all items that we had to dig but didnt want to
+		-- we also drop all but one of the items in the ignoreslots in this case
+		if config["digArea_dropIgnoreSlots"] == true and config["digArea_ignoreSlots"] ~= nil and #config["digArea_ignoreSlots"] > 0 then
+			local skip = false
+			for j = 1,#config["digArea_ignoreSlots"],1 do
+				select(config["digArea_ignoreSlots"][j])
+				for k = 1,16,1 do
+					count = turtle.getItemCount(k)
+					if count > 0 then
+						skip = false
+						for l = 1,#config["digArea_ignoreSlots"],1 do
+							if config["digArea_ignoreSlots"][l] == k then
+								skip = true
+								break
+							end
+						end
+						if not skip then
+							if turtle.compareTo(k) then
+								select(k)
+								dropDir(5,math.min(64,count))
+							end
+						end
+					end
+				end
+				if turtle.getItemCount(config["digArea_ignoreSlots"][j]) > 1 then
+					select(config["digArea_ignoreSlots"][j])
+					dropDir(5,turtle.getItemCount(config["digArea_ignoreSlots"][j])-1)
+				end
+			end
+
+			for i= 16,1,-1 do
+				if turtle.getItemCount(i) == 0 then
+	
+					return false
+				end
+			end
+		end
+		
+		return true
+	end
+	
+	return false
+end
+
+function getNumItems()
+	local count = 0
+	for i= 16,1,-1 do
+		count = count + turtle.getItemCount(i)
+	end
+	return count
+end
+
+
+-- Consume ALL the fuel!!!
+function consumeAllFuel(callDepth)
+	local n = 1
+	local level = turtle.getFuelLevel()
+	level = level or 0
+--	debug("consumeAllFuel: starting with level "..textutils.serialize(level))
+	if level == turtle.getFuelLimit() then
+--		debug("consumeAllFuel: already fueled TO THE MAX!!!111!")
+		return 0
+	end
+
+--	debug("consumeAllFuel: level is below max, continue.")
+	local count
+	for n = 1,16,1 do
+		count = turtle.getItemCount(n)
+		if count > 0 then 
+			turtle.select(n)
+	--		debug("consumeAllFuel: checking slot "..textutils.serialize(n))
+			while turtle.refuel(1) do
+				--sleep(0) -- MARKMARK--
+				--true
+				swarm.status(callDepth,"recharging [USING FUEL]: "..turtle.getFuelLevel())
+	--			debug("consumeAllFuel: consumed 1 item form slot "..textutils.serialize(n)..", refueled now: "..textutils.serialize(turtle.getFuelLevel() - level))
+				----sleep(0) -- MARKMARK--
+				print("recharging: "..turtle.getFuelLevel() - level)
+				if turtle.getFuelLevel() == turtle.getFuelLimit() then
+					return turtle.getFuelLevel() - level
+				end
+			end
+	--		debug("consumeAllFuel: refuel failed for "..n..", trying next slot. current level: "..textutils.serialize(turtle.getFuelLevel() - level))
+			if turtle.getFuelLevel() == turtle.getFuelLimit() then
+				return turtle.getFuelLevel() - level
+			end
+		end
+	end
+--	debug("consumeAllFuel: stopped refueling, no more fuel. amount refueled: "..textutils.serialize(turtle.getFuelLevel() - level))
+	return turtle.getFuelLevel() - level
+end
+
+function select(slot)
+	if not (turtle.getSelectedSlot() == slot) then
+		turtle.select(slot)
+	end
+end
+-- Recharges the turtle, if it has fuel also use that, ALL of it!
+function recharge(callDepth,dir)
+	swarm.status(callDepth,"Recharging at station!")
+	dir = dir or config["rechargePos"][4]
+	local last,drop,r
+--[[	while true do
+		turtle.select(16)
+		suckDir(dir)
+		print("?")
+		sleep(0)
+	end
+--]]
+	while getFuelLevel() < getFuelLimit() do
+		--sleep(0) -- MARKMARK--
+	
+		if turtle.getItemCount(16) > 0 then
+			if config["dropRemainingFuelToStoragePos"] and config["storagePos"][1] == config["rechargePos"][1] and config["storagePos"][2] == config["rechargePos"][2] and config["storagePos"][3] == config["rechargePos"][3] then
+				unload(callDepth+1,config["storagePos"][4])
+			else
+				unload(callDepth+1,config["rechargePos"][4])
+			end
+		end
+		
+		last = getFuelLevel()
+		-- TODO: make sure this is not a keep-slot
+		select(16)
+		
+		r = suckDir(dir)
+	
+		-- Clear if we full?
+		if not r then
+			if turtle.getItemCount(16) == 0 then
+				print("no fuel?")
+				
+			else
+				print("cannot suck fuel from dir "..textutils.serialize(dir))
+				-- bug?
+			end
+		else 
+			print("sucked fuel")
+		end
+		
+		local fuelPerItem = getFuelLevel()
+		--TODO: determine amount of fuel per item and then calculate needed items to be consumed at once
+		while (getFuelLevel() < getFuelLimit()) and (turtle.getItemCount(16) > 0) do
+			select(16)
+			if not turtle.refuel(1) then
+				break
+			end
+			fuelPerItem = fuelPerItem - getFuelLevel()
+			turtle.refuel(math.max(1,math.min(turtle.getItemCount(16),(getFuelLimit() - getFuelLevel())/fuelPerItem)))
+			
+		end
+		
+		if getFuelLevel() > last then
+			swarm.status(callDepth,"Recharging at station! "..getFuelLevel().." / "..getFuelLimit())
+		else
+			swarm.status(callDepth,"Cannot recharge, no fuel in station?! "..getFuelLevel().." / "..getFuelLimit())
+		end
+
+		--consumeAllFuel()
+	end
+	if config["dropRemainingFuelToStoragePos"] and config["storagePos"][1] == config["rechargePos"][1] and config["storagePos"][2] == config["rechargePos"][2] and config["storagePos"][3] == config["rechargePos"][3] then
+		unload(callDepth+1,config["storagePos"][4])
+	else
+		unload(callDepth+1,config["rechargePos"][4])
+	end
+	return true
+end
+
+function needToRecharge()
+	local needed = 5000
+	if turtle.getFuelLevel() < needed then
+		return true
+	end
+	return false
+end
+
+
+
+function digTo(target,callDepth)
+	callDepth = callDepth or 1
+
+	local dir = -1
+	local d
+	local counter = 0
+	swarm.status(callDepth,"dig to "..textutils.serialize(target))
+	
+
+	--debug("dig to "..textutils.serialize(pos))
+	while pos[1] ~= target[1] or pos[2] ~= target[2] or pos[3] ~= target[3] do
+		--sleep(0) -- MARKMARK--
+		-- vertical, then y, then x
+		if pos[3] < target[3] then dir = 4
+		elseif pos[3] > target[3] then dir = 5
+		elseif pos[2] < target[2] then dir = 2
+		elseif pos[2] > target[2] then dir = 0
+		elseif pos[1] < target[1] then dir = 1
+		elseif pos[1] > target[1] then dir = 3
+		end
+		
+		while not goDir(dir) do
+			--sleep(0) -- MARKMARK--
+			counter = 0
+			while isOtherDroneAtPos(pos[1]+swarm.xDirs[dir],pos[2]+swarm.yDirs[dir],pos[3]+swarm.zDirs[dir]) do
+				-- We should not try do dig through other drones, lets just wait and see.
+				-- TODO: this will deadlock if two drones want to dig at each others position.
+				swarm.status(callDepth,"waiting for other drone to move out of digging-zone.")
+
+				sleep(0.5)
+				counter = counter + 1
+				if counter > 10 then
+					return -1
+				end
+			end
+			
+			if digDir(dir) or attackDir(dir) then
+				while suckDir(dir) do
+					--sleep(0) -- MARKMARK--
+					while suckAll() do
+						--sleep(0) -- MARKMARK--
+					end
+				end
+			--elseif dir == 5 and not digDir(dir) then -- could not dig down
+				-- hit bedrock, or something else we cannot dig.
+			--	return 0
+			elseif detectDir(dir) == 1 then
+				-- hit bedrock, or something else we cannot dig.
+			
+				return 0
+			end
+			--end
+		end
+		pos[1] = pos[1] + swarm.xDirs[dir]
+		pos[2] = pos[2] + swarm.yDirs[dir]
+		pos[3] = pos[3] + swarm.zDirs[dir]
+		
+		broadcast()
+
+	end
+	return 1
+end
+
+
+function checkAbort()
+	if abort then
+		swarm.status(callDepth,"abort received, stopping whatever it is i am doing.")
+		abort = false
+		return true
+	else
+		return false
+	end
+end
+
+-- Unloads and/or Recharges if needed, returns to digging afterwards.
+function resupply(callDepth,force)
+	force = force or false
+	if (needToRecharge() or needToUnload()) or force then
+		
+		swarm.status(callDepth,"Returning to recharge/unload")
+
+		swarm.status(callDepth,"Need to unload, returning to storagePos.")
+					
+		moveToPos("storagePos",-1,callDepth+1)
+		--consumeAllFuel()		
+		unload(callDepth+1,config["storagePos"][4])
+		
+		swarm.status(callDepth,"Unloaded.")
+		
+		--if needToRecharge() or swarm.manhattanDistance(currentPos[1] == config["rechargePos"][1] and currentPos[2] == config["rechargePos"][2] and currentPos[3] == config["rechargePos"][3]) <= 20 then
+			--swarm.status = "Need to recharge, returning to rechargePos."
+			
+			--[[ -- findPath checks for this
+			-- Wait for other drones if we're close by, otherwise just go there and maybe the other drone is gone by then
+			if swarm.manhattanDistance(currentPos,config["rechargePos"]) < 20 then
+				while isOtherDroneAtPos(config["rechargePos"]) do
+					swarm.status(callDepth,"Need to recharge, waiting for other drone to finish.")
+					sleep(1)
+				end
+			end
+			--]]
+		swarm.status(callDepth,"Need to recharge,going to position.")
+		moveToPos("rechargePos",-1,callDepth+1)
+	
+		swarm.status(callDepth,"Need to recharge, i am in position.")
+		
+		--consumeAllFuel()
+		
+		recharge(callDepth+1,config["rechargePos"][4])
+		
+		swarm.status(callDepth,"Recharged.")
+		
+			
+			
+			if getNumItems() > 0 then
+				-- If we just recharged, also unload, even if not needed
+				-- Just cause in my setups it usually saves a trip back 
+				-- shortly afterwards
+				
+				moveToPos("storagePos",-1,callDepth+1)
+				unload(callDepth+1,config["storagePos"][4])
+			end
+			
+		--end
+
+		swarm.status(callDepth,"Returning to operation")
+		
+		--moveToPos("jobPos")
+		
+	--	swarm.status(callDepth,"Resuming operation")
+		
+		-- We dig our way back - it is faster,
+		-- and we have enough inventory space 
+		-- after unloading.
+		--digTo(currentPos)
+		
+		return true
+	end
+	return false
+end
+
+-- Digging functions
+
+function digArea(posMin,posMax,callDepth)
+	callDepth = callDepth or 1
+
+	swarm.status(callDepth,"planning excavation")
+
+--	debug(callDepth)
+	local rz = math.abs(posMax[3] - posMin[3])+1
+	local ry = math.abs(posMax[2] - posMin[2])+1
+	local rx = math.abs(posMax[1] - posMin[1])+1
+	local dir = {}
+	rz = math.ceil(rz/3)
+	local totalBlocks = rz*ry*rx
+	local x,y,z,r
+	local startTime = swarm.timestamp()/20
+	
+	local start = config["jobStatus"]
+	if start == nil then
+		config["jobStatus"] = 0
+		start = 0
+	end
+	local timers = { 0,0,0,0}
+	swarm.status(callDepth,"digArea(): "..start.."/"..totalBlocks.." "..config["jobStatus"])
+	
+	if not swarm.isWithin(pos,posMin,posMax) then -- pos[1] < posMin[1] or pos[1] > posMax[1] or pos[2] < posMin[2] or pos[2] > posMax[2] or pos[3] < posMin[3] or pos[3] > posMax[3]
+		local entrances = heap:new()
+		local x,y,z,r,score
+		
+		local areas = {}
+		areas[1] = {{posMin[1]-1,posMin[2],posMin[3]},{posMin[1],posMax[2],posMax[3]}}
+		areas[2] = {{posMax[1],posMin[2],posMin[3]},{posMax[1]+1,posMax[2],posMax[3]}}
+		
+		areas[3] = {{posMin[1],posMin[2]-1,posMin[3]},{posMax[1],posMin[2],posMax[3]}}
+		areas[4] = {{posMin[1],posMax[2],posMin[3]},{posMax[1],posMax[2]+1,posMax[3]}}
+		
+		areas[5] = {{posMin[1],posMin[2],posMin[3]-1},{posMax[1],posMax[2],posMin[3]}}
+		areas[6] = {{posMin[1],posMin[2],posMax[3]},{posMax[1],posMax[2],posMax[3]+1}}
+		
+		--[[for z = posMin[3]-1,posMax[3]+1,rz do
+			for y = posMin[2]-1,posMax[2]+1,ry do
+				for x = posMin[1]-1,posMax[1]+1,rx do
+					if not ( ((x < posMin[1] or x > posMax[1]) and (y < posMin[2] or y > posMax[2])) or ((x < posMin[1] or x > posMax[1]) and (y < posMin[2] or y > posMax[2])) or ((x < posMin[1] or x > posMax[1]) and (y < posMin[2] or y > posMax[2]))) then
+						r = navmap:get2(x,y,z,false,callDepth+1)
+						if r == nil or r == 0 then
+							entrances:insert(swarm.manhattanDistance(pos,{x,y,z}),{x,y,z})
+						end
+					end
+				end
+			end
+		end--]]
+--print("YOU ARE HERE!!")
+--print(""..nil)
+		moveTo({posMin[1],posMin[2],posMin[3],posMax[1],posMax[2],posMax[3]},-1,callDepth+1)
+		
+		for i = 1,6,1 do
+			entrances:insert(swarm.manhattanDistance(pos,areas[i][1],areas[i][2]),areas[i])
+		end
+		local found = true
+		while not entrances:empty() do
+			score,r = entrances:pop()
+			config["tmpJobPos"] = {r[1][1],r[1][2],r[1][3],r[2][1],r[2][2],r[2][3]}
+			swarm.status(callDepth,"digArea(): moving to digging zone, checking entrance @ "..textutils.serialize(r))
+
+			--TODO: findPath to take area argument?
+			--TODO: moveToPos will move the drone through the digging area
+			--TODO: looking for an entrance, not noticing drone is already in a good spot
+			
+			--TODO: change findPath function to accept areas and change existing calls to it to just use 1x1 areas?!!?!?
+				
+			if moveToPos("tmpJobPos",-1,callDepth+1) then
+				found = true
+				break
+				
+			end
+		end
+		if not found then
+			swarm.status(-101,"digArea(): cannot enter digging zone - no way in without digging!")
+			return false
+		end
+		--TODO: detect and walk if open instead of dig
+		if pos[1] < posMin[1] then
+			digDir(1)
+		end
+		if pos[1] > posMax[1] then
+			digDir(3)
+		end
+		if pos[2] < posMin[2] then
+			digDir(0)
+		end
+		if pos[2] > posMax[2] then
+			digDir(2)
+		end
+		if pos[3] < posMin[3] then
+			digDir(4)
+		end
+		if pos[3] > posMax[3] then
+			digDir(5)
+		end
+
+		-- Should have reached digArea by now
+--[[
+		config["jobPos"] = config["jobPos"] or {posMax[1],posMax[2],posMax[3],0}
+		swarm.status(callDepth,"digArea(): moving to digging zone",true)
+		if not moveToPos("jobPos",-1,callDepth+1) then
+			swarm.status(-101,"digArea(): Could not move to digging zone.",true)
+			return false
+		end
+--]]
+	end
+	local currentPos = {0,0,0}
+	local skip = 0
+	local dig = true
+	for i = start,totalBlocks-1,1 do
+		--sleep(0) -- MARKMARK--
+		x = (i % rx) + 1
+		y = (((i-x+1) / rx) % ry) + 1
+		z = (((i-(i%(rx*ry))) / (rx*ry)) * 3) + 1
+		if z % 2 == 1 then
+			y = ry+1-y
+			x = rx+1-x
+		end
+		if y % 2 ~= 1 then
+			x = rx+1-x
+		end
+		
+		x = x + posMin[1] - 1
+		y = y + posMin[2] - 1
+		z = (posMax[3] - z) 
+		
+		if z < posMin[3] then z = posMin[3] end
+		if z > posMax[3] then z = posMax[3] end
+		
+		swarm.status(callDepth,string.format("digging: %.4f %%, %.2f bps, %.2f s. etc",swarm.numberFormat(((i)*100) / (totalBlocks-1),4),swarm.numberFormat((i-start)/((swarm.timestamp()/20.0)-startTime)),swarm.numberFormat((totalBlocks-i)/((i-start)/((swarm.timestamp()/20.0)-startTime)))))
+		
+		if digTo({x,y,z+skip},callDepth+1) then 
+			--sleep(0) -- MARKMARK
+			if z < posMax[3] and detectDir(4) == 1 then
+				dig = true
+				if config["digArea_ignoreSlots"] ~= nil then
+					for j = 1,#config["digArea_ignoreSlots"],1 do
+						turtle.select(config["digArea_ignoreSlots"][j])
+						if compareDir(4) then
+							dig = false
+							break
+						end
+					end
+				end
+						
+				if dig and digDir(4) then
+					suckDir(4)
+					navmap:set2(x+swarm.xDirs[4],y+swarm.yDirs[4],z+swarm.zDirs[4],0)
+				end
+			--TODO: set navmap even if we don't dig?
+			end
+			if z > posMin[3] and detectDir(5) == 1 then
+				dig = true
+				if config["digArea_ignoreSlots"] ~= nil then
+					for i = 1,#config["digArea_ignoreSlots"],1 do
+						turtle.select(config["digArea_ignoreSlots"][i])
+						if compareDir(5) then
+							dig = false
+							break
+						end
+					end
+				end
+				if dig and digDir(5) then
+					suckDir(5)
+					navmap:set2(x+swarm.xDirs[5],y+swarm.yDirs[5],z+swarm.zDirs[5],0)
+				end
+			end
+			
+			config["jobStatus"] = i
+			if i % 10 == 0 then swarm.saveConfig(callDepth+1,config) end
+			--if i % 100 == 0 then  -- TODO:?? this will drop items ?
+			currentPos = {pos[1],pos[2],pos[3]} --copy
+			if resupply(callDepth+1,false) then
+				moveTo(currentPos,-1,callDepth+1)
+			end
+			--end
+			if skip > 0 then skip = skip - 1 end
+		else 
+			-- we hit bedrock
+			skip = skip + 1
+			i = i - 1
+		end
+		--print("timers: "..timers[1]..","..timers[2]..","..timers[3]..","..timers[4]..","..swarm.timestamp())
+	end
+	--print(""..nil)
+	config["jobStatus"] = nil
+	swarm.saveConfig(callDepth+1,config)
+	swarm.status(callDepth,"finished digging")
+	return true
+end
+
+function digChunk(x,y,maxz,callDepth)
+	-- TODO: find nice solution for nonflat bedrock - instead do skipping it.
+	local minz = 4 -- bedrock?
+	local min = {x*16,y*16,minz}
+	local max = {x*16+15,y*16+15,maxz}
+	
+	print("currently in chunk "..((pos[1]- (pos[1]%16))/16).." "..((pos[2]- (pos[2]%16))/16))
+	swarm.status(callDepth,"digging chunk "..x..","..y.." from "..min[1].."x"..min[2].." to "..max[1].."x"..max[2])
+	return digArea(min,max,callDepth+1)
+end
+
+--[[
+    The toplevel coroutines:
+--]]
+
+-- Timed broadcast - actually only needed when we're not moving around
+function cast()
+	swarm.status(-1002,"cast() started",true)
+	peripheral.call("right","open",65535)
+	--rednet.open("right")
+	while true do
+		sleep(1)
+		peripheral.call("right","open",65535)
+		xpcall(broadcast,err)
+	end
+	return true
+end
+
+-- Our gui/timer
+function gui()
+	local screenSize = {term.getSize()}
+	local timer
+	local e,menu,i
+	term.clear()
+	while true do
+		timer = os.startTimer(1)
+		e = {os.pullEvent("timer")}
+		if e[2] == timer then
+			term.setCursorPos(1,1)
+			term.clear()
+			
+			if quit then
+				print("shutting down...")
+				return
+			end
+			
+			--broadcast()
+		
+			print("SWARM drone # ID: "..id.." Name: "..os.getComputerLabel())
+			print("Current time: "..swarm.timestamp()) 
+			print("Current position: "..pos[1]..","..pos[2]..","..pos[3]) 
+			print("Current direction: "..xDir..","..yDir..","..zDir) 
+			print("Fuel: "..getFuelLevel().." Items unloaded: "..unloaded) --.." , collected: "..collected)
+			print("HomePos: "..config["homePos"][1]..","..config["homePos"][2]..","..config["homePos"][3]..","..config["homePos"][4])
+			print("StoragePos: "..config["storagePos"][1]..","..config["storagePos"][2]..","..config["storagePos"][3]..","..config["storagePos"][4])
+			print("JobPos: "..config["jobPos"][1]..","..config["jobPos"][2]..","..config["jobPos"][3]..","..config["jobPos"][4])
+			print("Status: "..callDepth)
+			print("Debug: "..counters[1]..", "..counters[2]..", "..counters[3]..", "..counters[4])
+			--[[
+			menu = "Menu: "
+			for i=1,#actions,1 do
+				if i == selected then
+					menu = menu.."["
+				end
+				menu = menu..actions[i]
+				if i == selected then
+					menu = menu.."]"
+				end
+				menu = menu.." "
+			end
+			term.setCursorPos(1,screenSize[2])
+			term.clearLine()
+			term.write(menu)
+			]]
+			----sleep(0) -- MARKMARK--
+		end
+	end
+end
+
+function key()
+	local e
+	while true do
+		e = {os.pullEvent("key")}
+		if e[1] == "key" then
+			if e[2] == 203 then -- -
+				selected = selected - 1
+				if selected < 1 then
+					selected = selected + #actions
+				end
+			elseif e[2] == 205 then -- +
+				selected = selected + 1
+				if selected > #actions then
+					selected = selected - #actions
+				end
+			elseif e[2] == 28 then -- enter
+				if actions[selected] == "abort" then
+					abort = true
+				end
+			end
+		end
+	end
+end
+
+
+function net()
+	swarm.status(-1001,"net() started",true)
+	local callDepth = -9
+	local e,p
+	swarm.openModem() -- necessary?
+	while true do
+		-- event,side,rid,id,msg,dist = os.pullEvent("modem_message")
+		e = {os.pullEvent("rednet_message")}
+		if e[1] == "rednet_message" then
+			--if e[2] == 38 then print(e[1].." "..e[2].." "..e[3]:byte(1)) end
+			if e[3]:byte(1) == 10 then -- Position broadcasts
+				p = textutils.unserialize(string.sub(e[3],2))
+				if p ~= nil then
+					dronePositions[e[2]] = {p[1],p[2],p[3]}
+				end
+			elseif e[3]:byte(1) == 100 then -- Status query 
+				rednet.send(e[2],string.char(101).."DRONE "..id.." ["..label.."] is at "..pos[1]..","..pos[2]..","..pos[3].." u:"..unloaded.." f:"..turtle.getFuelLevel())
+			elseif e[3]:byte(1) == 110 then -- Reboot signal
+				swarm.status(callDepth,"received reboot signal")
+				broadcast()
+				swarm.saveConfig(callDepth+1,config)
+				rednet.send(e[2],string.char(111))
+				swarm.status(callDepth,"will now reboot")
+				os.reboot()
+				break
+			elseif e[3]:byte(1) == 130 then -- Hard reboot signal
+				os.reboot()
+				break
+			elseif e[3]:byte(1) == 140 then -- Shutdown signal
+				swarm.status(callDepth,"received shutdown signal")
+				broadcast()
+				swarm.saveConfig(callDepth+1,config)
+				rednet.send(e[2],string.char(141))
+				swarm.status(callDepth,"will now shutdown")
+				os.shutdown()
+				break
+			elseif e[3]:byte(1) == 120 then -- Full status query
+				rednet.send(e[2],string.char(121)..textutils.serialize(swarm._status))
+			elseif e[3] == "PING" then -- GPS Ping ?!
+				rednet.send(id,textutils.serialize({pos[1],pos[2],pos[3]}))
+			end
+		end
+	end
+end
+function requestJob()
+	rednet.send(config["jobServerID"],string.char(20))
+	return os.startTimer(4)
+end
+function goHome(callDepth,force)
+	force = force or false
+	resupply(callDepth+1,force)
+	if swarm.xPos ~= config["homePos"][1] or swarm.yPos ~= config["homePos"][2] or swarm.zPos ~= config["homePos"][3] then
+		moveToPos("homePos",0,callDepth)
+	end
+end
+-- This executes the actual job and is called as a coroutine through parallel-API
+function main()
+	swarm.status(-1000,"main() started",true)
+	callDepth = 1
+
+	config["jobServerID"] = 25
+	config["jobPos"] = config["homePos"]
+	local e,msg,func,r,error
+	swarm.status(callDepth,"drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.")
+	local jobId,jobStatus
+
+	
+	while not calibrate(0) do
+		--sleep(0) -- MARKMARK--
+		print("FATAL: no config and no gps signal!")
+		return
+	end
+		
+
+	goHome(callDepth+1,true)
+	local jobRequestTimeout = requestJob()
+
+	while true do
+		e = {os.pullEvent()}
+		
+		if e[1] == "timer" and e[2] == jobRequestTimeout then
+			print("No answer from jobserver "..config["jobServerID"]..", resending...")
+			swarm.status(callDepth,"drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is trying to contact jobserver "..config["jobServerID"]..".")
+				
+			jobRequestTimeout = requestJob()
+		elseif e[1] == "modem_message" then
+			if e[5] ~= nil and e[5]["message"] ~= nil and e[5]["message"]:byte(1) == 21 then
+				msg = textutils.unserialize(string.sub(e[5]["message"],2))
+				jobRequestTimeout = nil
+				if msg == nil then
+					swarm.status(callDepth,"drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.")
+					print("Currently nothing to do, waiting ...")
+					resupply(callDepth+1)
+					sleep(4)
+					jobRequestTimeout = requestJob()
+				else
+					jobId = msg[1]
+					config["jobStatus"] = msg[2][1]
+					msg = msg[2][2]
+
+					-- Tell server that we accept the job
+					rednet.send(e[4],string.char(22)..textutils.serialize({jobId,true}))
+					print("accepted job "..jobId)
+					func = loadstring(msg)
+					setfenv(func,env)
+					
+					r,error = pcall(func)
+					if not r then
+						print("job failed, retry")
+						-- Tell server that we failed doing the job
+						rednet.send(config["jobServerID"],string.char(24)..textutils.serialize({jobId,-1,error}))
+					else
+						print("job ok: "..textutils.serialize(r))
+						-- Tell server that we did the job
+						rednet.send(config["jobServerID"],string.char(24)..textutils.serialize({jobId,-2,textutils.serialize(r)}))
+					end
+				
+					goHome(callDepth+1)
+					
+					jobRequestTimeout = requestJob()
+				end
+	--		return
+			end
+		else
+			--print(textutils.serialize(e))
+		end
+	end
+
+--[[
+	swarm.status(callDepth,"ready!")
+	--swarm.log(swarm.__status.."\n")
+	
+	-- Check if we have a job-file
+	local jobFile = "job_"..id
+	if not fs.exists(jobFile) then
+		swarm.log("FATAL: this drone does not have a job script, please create one called '"..jobFile.."'.")
+		print("FATAL: this drone does not have a job script, please create one called '"..jobFile.."'.")
+		--sleep(4)
+		quit = true
+		return "no script"
+	end
+
+	-- Load job from file and turn it into a callable function
+	local script = loadfile(jobFile)
+	if script == nil then
+		print("FATAL: could not parse script '"..jobFile.."'.")
+		return "bad script"
+	end
+
+	-- Set environment for that function to the global env.
+	setfenv(script,env)
+	
+	--swarm.log("spawn\n")
+	quit = swarm.wrap(script,"job")
+	swarm.saveConfig(callDepth+1,config)
+	swarm.status(callDepth,"job finished:"..textutils.serialize(quit))
+	--]]
+	return "ok"
+	
+end
+
+--[[
+    The one and only: run()
+--]]
+function run()
+	callDepth = 0
+	term.clear()
+	term.setCursorPos(1,1)
+	
+	print("[SWARM drone #"..id.."]")
+	swarm.log("[SWARM drone #"..id.."]")
+
+	if peripheral.getType("left") == "Miny Chunky Module" then
+		print("Using the fabulous Miny Chunky Module!")
+		useMinyMod = true
+		miny = peripheral.wrap("left")
+		digDir = digDirMiny
+	end
+	
+	
+	-- Open modem
+	swarm.openModem()
+
+	-- Load config or create a default one.
+	config = swarm.loadConfig()
+	if not config or not config["homePos"] then
+		print("No config found, trying to create one.")
+		
+		
+		while turtle.getFuelLevel() < 2 do
+			print("Not enough fuel to calibrate, gimme some!")
+			sleep(1)
+			consumeAllFuel(callDepth+1)
+			
+		end
+		
+		print("Trying to calibrate (fuel: "..turtle.getFuelLevel()..") ...")
+		
+		-- Orient ourselfes using GPS
+		while not calibrate(0) do
+			--sleep(0) -- MARKMARK--
+			print("FATAL: no config and no gps signal!")
+			return
+		end
+		
+		
+		-- Contact a mapserver and remember its id.
+		config = config or {}
+		config["mapServerID"] = nil
+		while config["mapServerID"] == nil do
+			print("Trying to contact a mapserver ...")
+			rednet.broadcast(string.char(123))
+			config["mapServerID"] = rednet.receive(0)
+			print("received mapserver response from: "..textutils.serialize(config["mapServerID"]))
+			if config["mapServerID"] == nil then
+				print("FATAL: no response from any mapserver!")
+				--return
+			end
+		end
+		
+		print("Found mapserver "..config["mapServerID"]..".")
+		
+		config["homePos"] = {pos[1],pos[2],pos[3],swarm.getDirection(xDir,yDir,zDir)}
+		config["storagePos"] = {pos[1],pos[2],pos[3],swarm.getDirection(xDir,yDir,zDir)}
+		--config["jobPos"] = {pos[1],pos[2],pos[3],swarm.getDirection(xDir,yDir,zDir)}
+		swarm.saveConfig(callDepth+1,config)
+		
+		print("Could not find config, created a new one.")
+		print("All positions set to current drone position.")
+		print("Please change '"..swarm.configFile.."' according")
+		print("to your needs and reboot this ")
+		
+		--sleep(60)
+		return
+	end
+
+	-- Get global environment so we can pass it to the job-script
+	env = getfenv()
+	--env.textutils = textutils
+
+	--swarm.wrap(function() print("AHA") return true end,"TEST")
+	swarm.status(0,"starting routines...\n")
+
+	-- Wrappers, to catch errors and stuff
+	function wrapReceiver() return swarm.wrap(net,"network receiver") end 
+	function wrapBroadcaster() return swarm.wrap(cast,"network broadcaster") end 
+	function wrapMain() return swarm.wrap(main,"main") end 
+	parallel.waitForAny(wrapReceiver,wrapBroadcaster,wrapMain)
+
+	if quit == true then
+		print("successfully terminated")
+	else
+		swarm.err("abnormal termination of routine")
+	end
+	broadcast()
+	return
+end

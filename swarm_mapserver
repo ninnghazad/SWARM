@@ -1,0 +1,19 @@
+--[[
+	SWARM info by ninnghazad
+	This is the mapserver of the SWARM ComputerCraft scripts.
+]]
+
+
+-- ############################################################################
+--                            START OF CODE
+-- ############################################################################
+
+os.loadAPI("mapserver") -- includes swarm api
+
+swarm.debug.override()
+swarm.status(0,"\nmapserver "..os.getComputerID().." '"..os.getComputerLabel().."' booting...\n")
+
+mapserver.run()
+-- ############################################################################
+--                            END OF CODE
+-- ############################################################################

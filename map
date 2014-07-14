@@ -1,0 +1,38 @@
+
+local map = {}
+map.__index = map
+function new(id,data)
+	return map(id,data)
+end
+function map.new(id,data)
+	local self = setmetatable({}, map)
+	self.id = id or 0
+	data = data or {{{}}}
+	self.data = data
+	return self 
+end
+setmetatable(map, {
+	__call = function (cls, ...)
+		return cls.new(...)
+	end,
+})
+function map:set(x,y,z,value)
+	if self.data[z] == nil then
+		self.data[z] = {}
+	end
+	if self.data[z][y] == nil then
+		self.data[z][y] = {}
+	end
+	self.data[z][y][x] = value
+end
+
+function map:get(x,y,z,value)
+	if self.data[z] ~= nil and self.data[z][y] ~= nil then
+		return self.data[z][y][x]
+	end
+	return nil
+end
+
+function map:getId() 
+	return self.id 
+end

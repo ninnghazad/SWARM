@@ -1,0 +1,150 @@
+-- cache nil map values also! --?????
+-- check fuel level on boot
+--[[
+	SWARM drone by ninnghazad
+	This is the drone-part of the SWARM ComputerCraft scripts.
+	It is supposed to help make a semi-autonomous group of turtles
+	do different tasks with as little maintenance as possible.
+	
+	SWARM provides:
+		-gps-navigation
+		-path-finding and distributed,
+		 consistent memory to speed up path-finding.
+		-collision avoidance between turtles where possible.
+		-remote monitoring of turtles.
+		
+	When booting the drone (a turtle running this script) it
+	will first orient itself via GPS. For that it will need
+	to move one block in any horizontal direction in order to 
+	determine its heading. After that it will a file called job_ID
+	and run its contents, see example.
+	
+	When drones move through tdrone.errain they have not yet explored, they
+	will try to find a short path to their target, remembering the
+	tdrone.errain themselfes and also submitting what they found to the server.
+	When the tdrone.errain has already been explored, they will request data
+	from the server to plan their route. Successfully followed paths
+	are cached, as are server-responses. Drones communicate their own
+	position to other turtles nearby and the server.
+	
+	It may take a while to find paths through maze-like structures,
+	this is because turtles are practically blind, and can only 
+	sense what they touch. Once sufficiently enough of the tdrone.errain
+	has been explored, movement-planning will be faster. More drones 
+	and/or drones that just explore the area will speed up exploration.
+	However, explored or not, if there is a way to the target, 
+	the drones will sooner or later find it. If explored tdrone.errain is
+	changed turtles will walk known paths until they run into a 
+	blockade and then try to find another way.
+	
+	Requirements:
+		- A wireless turtle with this script installed.
+			If you want the turtle to do anything it will also
+			need a tool attached, or some peripheral.
+		- At least one running SWARM server.
+		- A working GPS system.
+		- Wireless connectivity to the SWARM server from any place
+		  the drone is supposed to move to or through.
+		
+		- [Optional] A charging-station per turtle, the charging-spot should
+		  be the turtles homePos. 
+			You can supply enough fuel to the turtle for all it
+			needs to do, but i prefer charging-stations. They
+			are more efficient then direct fueling, and a lot
+			more convenient for larger jobs, or continously running
+			jobs.
+		- [Optional] A chest of some sort to drop of the goods.
+			Enderchests (not vanilla ones), Chests, Tesseracts work well.
+			
+	Config:
+		The configuration for each drone is stored in a file called
+		"config_ID", where ID is the numeric id of the drone.
+		This file will be created when the drone is first booted,
+		and all values will be set to defaults, all positions will
+		be set to the current position.
+		You will probably want to adjust these settings.
+		
+	Notes: 
+		GPS is only needed when the drones boot, so it would
+		be enough to have their homePos covered by GPS - however i
+		do strongly advise to have the complete area the drones are
+		supposed to work in covered, as otherwise all hell breaks
+		loose when minecraft restarts.
+		
+		Similar applies to connectivity to the mapserver. While
+		drones can operate without it, and for a single drone
+		it would not make much difference, the mapserver periodically
+		saves the mapdata, the drones do not. So a minecraft restart
+		would eliminate all exploration-data if you would no use
+		a mapserver. Also the mapserver is the way to share this
+		data among multiple drones, so whatever area a drone explores,
+		all other drones will know about. Having multiple drones
+		(and what kind of swarm consists of a single drone...) without
+		a mapserver is much more inefficient.
+		
+		Make damn sure you have the chunks loaded your drones operate
+		in. I use chicken's chunkloaders for that purpose, as they
+		have a high range. This is a general problem in minecraft. 
+		There was a version of the chunkloader-peripheral for turtles 
+		which would act as chunkloader and wireless-modem in 
+		MiscPeripherals, but this functionality has been removed in 
+		recent versions. While it is possible to have chunkloading 
+		turtles follow your drones around, this creates more problems 
+		then it solves. 
+		
+		If you have access to ComputerCraft configs, i advise you
+		to raise the ModemRange a lot, like above 10000. While not
+		needed it just makes things easier.
+		
+		Turtles cannot by themselfes recognize other turtles. To them
+		they are just like any other block. They do not count as mobs.
+		While drones know other drones because they broadcast their
+		own positions, drones will just dig through any turtle not
+		belonging to the drone. They will usually end up in the
+		drone's dropoff-chest.
+		
+	Disclaimer:
+		What i mean with "all hell breaks loose" when drones do not
+		have connection to GPS and/or the mapserver or run into 
+		unloaded chunks is that they cannot know their position 
+		in the world, and as a result they may dig through your base, 
+		beat your cat and eat all your sweets.
+		
+		This code contains bugs, and there are still a few situations
+		drones may get into, where they will not behave well. Mainly
+		the aforementioned connectivity-issues, but also situations 
+		when they block each others paths in tunnels.
+		
+		ComputerCraft also has its limitations/bugs. Which means
+		that at some point the rednet may just fail.
+		
+		That said - i have used rather large amounts of drones to
+		successfully dig very large areas.
+		
+		When you use this for the first time, make a test-setup at
+		save distance from anything important.
+		
+		Whatever bad things happen - i warned you, 
+		so don't get pissed.
+		
+		If you advance on this code, i would love to get a copy of 
+		your improvements.
+		
+		Apart from that, have fun playing around with this.
+	
+]]
+
+
+-- ############################################################################
+--                            START OF CODE
+-- ############################################################################
+
+os.loadAPI("drone") --includes swarm api
+
+swarm.debug.override()
+swarm.status(0,"\ndrone "..os.getComputerID().." '"..os.getComputerLabel().."' booting...\n")
+
+drone.run()
+-- ############################################################################
+--                            END OF CODE
+-- ############################################################################

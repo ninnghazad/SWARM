@@ -1,0 +1,201 @@
+--[[
+	SWARM HUD server by ninnghazad
+	Listens to the drones' status broadcasts and 
+	displays them to all users' HUDs that are 
+	linked to the terminal-bridge.
+	Requires:
+		computer
+		wireless modem
+		terminal bridge
+
+]]
+
+-- START OF USER CONFIGURABLES
+
+-- Adjust peripheral sides for your setup.
+local sideModem = "back"
+local sideBridge = "left"
+
+-- Timeout for drones in seconds
+local timeout = 30
+
+-- Text-colors for HUD
+local colorHeader = 0xFF0000
+local colorDrones = 0xFFFFFF
+
+-- HUD upper left corner position
+local positionHUD = {8,16}
+
+-- END OF USER CONFIGURABLES
+
+
+-- Returns integer tick-timestamp
+local function timestamp()
+	return (os.day()*24000)+(os.time()*1000)
+end
+
+function formatTime(time)
+	local t = {}
+	t[1] = time % 60
+	time = (time - t[1]) / 60
+	t[2] = time % 60
+	time = (time - t[2]) / 60
+	t[3] = time % 24
+	time = (time - t[3]) / 24
+	t[4] = time % 7
+	time = (time - t[4]) / 7
+	t[5] = time % 4
+	time = (time - t[5]) / 4
+	t[6] = time % 12
+	local str = " "
+	t[1] = math.ceil(t[1]*100)/100
+	if t[6] > 0 then str = str..t[6].." M, " end
+	if t[5] > 0 then str = str..t[5].." W, " end
+	if t[4] > 0 then str = str..t[4].." D, " end
+	if t[3] > 0 then str = str..t[3].." h, " end
+	if t[2] > 0 then str = str..t[2].." m, " end
+	if t[1] > 0 then str = str..t[1].." s " end
+	return str
+end
+
+-- Declare local variable
+local id,name,msg = os.getComputerID(),os.getComputerLabel()
+local timer
+local e
+local drones = {}
+local numDrones = 0
+local HUDLines = {}
+local HUDTimers = {}
+
+local items = 0
+local droneItems = {}
+local start = timestamp()
+local first = 4
+local activity = {"Ooo","oOo","ooO","oOo"}
+local activityCounter = 1
+
+
+-- Start
+term.clear()
+term.setCursorPos(1,1)
+print("SWARM HUD server booting...")
+
+-- Open modem through rednet api
+rednet.open(sideModem)
+
+-- Wrap terminal-bridge peripheral
+local HUD = peripheral.wrap(sideBridge)
+
+-- Wipe HUD, just to be sure
+HUD.clear()
+
+local lineOffset = 4
+-- Prepare a header, it gets a negative index
+-- as the per-drone elements get indices by ID
+HUDLines[-1] = HUD.addText(positionHUD[1],positionHUD[2],"",colorHeader)
+HUDLines[-1].setScale(0.5)
+HUDLines[-2] = HUD.addText(positionHUD[1],positionHUD[2]+lineOffset,"",colorHeader)
+HUDLines[-2].setScale(0.5)
+-- Initiate timer
+timer = os.startTimer(1)
+
+-- The main loop, listening for events, hopefully forever
+while true do
+	e = {os.pullEvent()}
+	if e[1] == "key" then -- Handle key-presses
+		if e[2] == 16 then
+			print("Q pressed, quitting...")
+			break
+		end
+	elseif e[1] == "rednet_message" and e[3]:byte(1) == 10 then -- Listen to drones' broadcasts
+		msg = string.sub(e[3],2)
+		drones[e[2]] = msg
+		
+		-- If this drone does not have a HUD element, add one
+		if HUDLines[e[2]] == nil then
+			numDrones = numDrones + 1
+			HUDLines[e[2]] = HUD.addText(positionHUD[1],positionHUD[2] + (numDrones * lineOffset) + lineOffset,msg,colorDrones)
+		end
+		
+		HUDTimers[e[2]] = timestamp()
+		
+	elseif e[1] == "timer" then -- Timed display and data updates
+		-- Reset screen
+		term.clear()	
+		term.setCursorPos(1,1)
+		
+		-- Print header to HUDs and screen
+		msg = "SWARM HUD server [Label: "..name.."] [ID: "..id.."] [up: "..formatTime((timestamp()-start)/20).."] ["..activity[activityCounter].."]"
+		activityCounter = activityCounter + 1
+		if activityCounter > #activity then activityCounter = 1 end
+		HUDLines[-1].setText(msg)
+		print(msg)
+		print("Press Q to quit.")
+		
+		-- Print list of users that are linked to our bridge
+		print("")
+		print("Connected Users:")
+		for key, value in pairs(HUD.getUsers()) do
+			print("    "..key .. ": " .. tostring(value))
+		end
+		
+		-- Print list of HUD elements to screen, for debugging
+		print("")
+		print("HUD Element IDs: ") 
+		for key, value in pairs(HUD.getAllIds()) do
+			print("    "..key .. ": " .. tostring(value))
+		end
+		
+		-- Print drones' status to HUDs and screen
+		print("")
+		print("Drones ("..numDrones.."):")
+		for id,status in pairs(drones) do
+			msg = id..": "..status
+			-- Mark timed out drones
+			if timestamp() - HUDTimers[id] > 20*timeout then
+				msg = "["..formatTime((timestamp() - HUDTimers[id])/20).."] "..msg
+				-- For debugging reasons we do not remove timed out drones from our lists
+			end
+			local tmp = textutils.unserialize(status)
+			if droneItems[id] == nil then 
+				droneItems[id] = tmp["unloaded"]
+				items = items + tmp["unloaded"]
+			elseif droneItems[id] < tmp["unloaded"] then
+				items = items + (tmp["unloaded"] - droneItems[id])
+				droneItems[id] = tmp["unloaded"]
+			else
+				droneItems[id] = tmp["unloaded"]
+			end
+			
+			if tmp["uptime"] ~= nil then
+				msg = msg.." ["..formatTime(tmp["uptime"]).."]"
+			end
+			HUDLines[id].setText(msg)
+			HUDLines[id].setScale(0.5)
+			print(msg)
+			
+			
+		end
+		
+		msg = items.." items in "..((timestamp() - start)/20).." seconds, "..(items/((timestamp() - start)/20)).." items/sec."
+		print("")
+		print(msg)
+		HUDLines[-2].setText(msg)
+		
+		-- Reset item counter once we have made with all alive drones
+		-- Just to have the stats ok if we restart the HUD
+		if first > 0 then
+			first = first - 1
+			if first == 1 then
+				items = 0
+			end
+		end
+		
+		-- Start a new timer
+		timer = os.startTimer(0.5)
+	end
+end
+
+-- Clear HUD before we exit.
+HUD.clear()
+print("Goodbye.")
