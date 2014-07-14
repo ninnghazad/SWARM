@@ -8,14 +8,14 @@ local files = {
 }
 local r,i,f,fn
 for i,fn in pairs(files) do
-	print("Downloading "..f)
+	print("Downloading "..fn)
 	r = http.get(url.."/"..fn)
 	r = r.readAll()
-	print("Saving "..f)
+	print("Saving "..fn)
 	f = fs.open(f,"w")
 	f.write(r)
 	f.close()
-	print("Finished "..f)
+	print("Finished "..fn)
 end
 print("All downloads finished. To install type one of:")
 print("\tswarm_install_drone")
