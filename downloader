@@ -5,6 +5,10 @@ local files = {
 	"heap",
 	"swarm",
 	"drone",
+	
+	"swarm_install_drone",
+	"swarm_config_drone",
+	
 }
 local r,i,f,fn
 for i,fn in pairs(files) do
