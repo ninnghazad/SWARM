@@ -1,0 +1,40 @@
+local jobServerID = 25
+
+local argv = {...}
+
+
+local file = fs.open(argv[1], "r")
+if file == nil then
+	source = argv[1]
+else
+	source = file.readAll()
+	file.close()
+end
+local msg = string.char(25)..textutils.serialize({source})
+
+rednet.open("back")
+rednet.send(jobServerID,msg)
+
+print("sent job to "..jobServerID)
+
+local timeout = os.startTimer(4)
+local e,r
+
+while true do
+	e = {os.pullEvent()}
+	if e[1] == "timer" and e[2] == timeout then
+		print("No answer yet, resend...")
+		print(msg)
+		rednet.send(jobServerID,msg)
+		timeout = os.startTimer(4)
+	elseif e[1] == "modem_message" and e[5]["message"]:byte(1) == 26 then
+		r = textutils.unserialize(string.sub(e[5]["message"],2))
+		if(r[1] == true) then
+			print("job_server "..jobServerID.." accepted job.")
+			return
+		else
+			print("job_server "..jobServerID.." declined job: "..r[2])
+			return
+		end
+	end
+end
