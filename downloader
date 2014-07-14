@@ -23,9 +23,9 @@ for i,fn in pairs(files) do
 		print("Could not download "..url..fn)
 	end
 end
-print("All downloads finished.\nTo install type one of:")
+print("All downloads finished.\n\nTo install type one of:")
 print("\tswarm_install_drone")
 print("\tswarm_install_mapserver")
 print("\tswarm_install_jobserver")
 print("\tswarm_install_infoserver")
-print("To just use the accompanying tools,\nno install is necessary.")
+print("\nTo just use the accompanying tools,\nno install is necessary.")
