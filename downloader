@@ -8,15 +8,13 @@ local files = {
 }
 local r,i,f,fn
 for i,fn in pairs(files) do
-	print("Downloading "..fn)
 	r = http.get(url..fn)
 	if r then
 		r = r.readAll()
-		print("Saving "..fn)
 		f = io.open("./"..fn,"w")
 		f:write(r)
 		f:close()
-		print("Finished "..fn)
+		print("Successfully downloaded "..fn)
 	else
 		print("Could not download "..url..fn)
 	end
