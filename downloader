@@ -14,8 +14,8 @@ for i,fn in pairs(files) do
 		r = r.readAll()
 		print("Saving "..fn)
 		f = io.open(fn,"w")
-		f.write(r)
-		f.close()
+		f:write(r)
+		f:close()
 		print("Finished "..fn)
 	else
 		print("Could not download "..url..fn)
