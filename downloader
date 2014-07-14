@@ -9,7 +9,7 @@ local files = {
 local r,i,f,fn
 for i,fn in pairs(files) do
 	print("Downloading "..fn)
-	r = http.get(url.."/"..fn)
+	r = http.get(url..fn)
 	r = r.readAll()
 	print("Saving "..fn)
 	f = fs.open(f,"w")
