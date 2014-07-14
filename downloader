@@ -10,12 +10,16 @@ local r,i,f,fn
 for i,fn in pairs(files) do
 	print("Downloading "..fn)
 	r = http.get(url..fn)
-	r = r.readAll()
-	print("Saving "..fn)
-	f = fs.open(f,"w")
-	f.write(r)
-	f.close()
-	print("Finished "..fn)
+	if r then
+		r = r.readAll()
+		print("Saving "..fn)
+		f = fs.open(f,"w")
+		f.write(r)
+		f.close()
+		print("Finished "..fn)
+	else
+		print("Could not download "..url..fn)
+	end
 end
 print("All downloads finished. To install type one of:")
 print("\tswarm_install_drone")
