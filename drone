@@ -19,8 +19,12 @@ pos = {0,0,0}
 xDir,yDir,zDir = 0,-1,0
 
 startTime = swarm.timestamp()
-label = os.getComputerLabel()
+
 id = os.getComputerID()
+
+os.setComputerLabel(swarm.getSystemType().." "..id)
+
+label = os.getComputerLabel()
 
 navmap = map.new()
 dronePositions = {}
@@ -37,6 +41,8 @@ config["mapServerID"] = 43
 config["homePos"] =	{6,6,6,0}
 config["storagePos"] =	{6,6,6,1}
 config["jobPos"] =	{6,6,6,2}
+
+
 
 
 -- Menu vars
@@ -483,7 +489,7 @@ function broadcast()
 	navmap:set(pos[1],pos[2],pos[3],{swarm.timestamp(),{0,1}})
 	msg = "{"..(pos[1])..","..(pos[2])..","..(pos[3])..","..(string.format("%q",swarm.__status))..',["unloaded"]='..(unloaded)..',["uptime"]='..((swarm.timestamp()-startTime)/20).."}"
 	rednet.broadcast(string.char(10)..msg)
-	os.setComputerLabel("drone "..id.." "..swarm.activityIndicator())
+	--os.setComputerLabel("drone "..id.." "..swarm.activityIndicator())
 	--print(textutils.serialize(_status))
 	return true
 end
@@ -922,6 +928,7 @@ function moveTo(target,retries,callDepth)
 	end
 	
 	if r then
+		swarm.log(textutils.serialize(target))
 		-- Only rotate to the specified direction if 
 		-- we have moved successfully
 		if target[4] ~= nil and target[5] == nil then
@@ -996,7 +1003,7 @@ function needToUnload()
 	if stacks >= 16 then
 		-- if dropIgnoreSlots is set, we will drop all items that we had to dig but didnt want to
 		-- we also drop all but one of the items in the ignoreslots in this case
-		if config["digArea_dropIgnoreSlots"] == true and config["ignoreSlots"] ~= nil and #config["ignoreSlots"] > 0 then
+		if config["dropIgnoreSlots"] == true and config["ignoreSlots"] ~= nil and #config["ignoreSlots"] > 0 then
 			local skip = false
 			for j = 1,#config["ignoreSlots"],1 do
 				select(config["ignoreSlots"][j])
@@ -1627,7 +1634,7 @@ function net()
 					dronePositions[e[2]] = {p[1],p[2],p[3]}
 				end
 			elseif e[3]:byte(1) == 100 then -- Status query 
-				rednet.send(e[2],string.char(101).."DRONE "..id.." ["..label.."] is at "..pos[1]..","..pos[2]..","..pos[3].." u:"..unloaded.." f:"..turtle.getFuelLevel())
+				rednet.send(e[2],string.char(101).."DRONE "..id.." ["..label.."] is at "..pos[1]..","..pos[2]..","..pos[3]..","..swarm.dirNames[swarm.getDirection(xDir,yDir,zDir)].." u:"..unloaded.." f:"..turtle.getFuelLevel())
 			elseif e[3]:byte(1) == 110 then -- Reboot signal
 				swarm.status(callDepth,"received reboot signal")
 				broadcast()
@@ -1676,14 +1683,6 @@ function main()
 	local e,msg,func,r,error
 	swarm.status(callDepth,"drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.")
 	local jobId,jobStatus
-
-	
-	while not calibrate(0) do
-		--sleep(0) -- MARKMARK--
-		print("FATAL: no config and no gps signal!")
-		return
-	end
-		
 
 	goHome(callDepth+1,true)
 	local jobRequestTimeout = requestJob()
@@ -1787,6 +1786,22 @@ function run()
 		digDir = digDirMiny
 	end
 	
+	print("Trying to calibrate (fuel: "..turtle.getFuelLevel()..") ...")
+	while turtle.getFuelLevel() < 2 do
+		swarm.status(callDepth,"PROBLEM: Not enough fuel to calibrate, gimme some!",true)
+		-- TODO: broadcast status with gps pos without heading as an SOS
+		sleep(1)
+		consumeAllFuel(callDepth+1)
+	end
+
+	-- Orient ourselfes using GPS
+	while not calibrate(0) do
+		swarm.status(callDepth,"PROBLEM: No GPS signal!",true)
+		-- TODO: broadcast some kind of SOS?!
+		sleep(1)
+		return
+	end
+	
 	
 	-- Open modem
 	swarm.openModem()
@@ -1797,21 +1812,6 @@ function run()
 		print("No config found, trying to create one.")
 		
 		
-		while turtle.getFuelLevel() < 2 do
-			print("Not enough fuel to calibrate, gimme some!")
-			sleep(1)
-			consumeAllFuel(callDepth+1)
-			
-		end
-		
-		print("Trying to calibrate (fuel: "..turtle.getFuelLevel()..") ...")
-		
-		-- Orient ourselfes using GPS
-		while not calibrate(0) do
-			--sleep(0) -- MARKMARK--
-			print("FATAL: no config and no gps signal!")
-			return
-		end
 		
 		
 		-- Contact a mapserver and remember its id.

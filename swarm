@@ -33,15 +33,16 @@ end
 version = "0.1"
 label = os.getComputerLabel()
 id = os.getComputerID()
-configFile = "config_"..id
+configFileName = "config_"..id
+logFileName = "log_"..id
 guiUpdateInterval = 1
-unknownErrorString = "UNKOWN ERROR"
-fatalErrorString = "FATAL ERROR"
+
+
+-- Constants that may be changed
 activityIndicatorString = {"[Ooo]","[oOo]","[ooO]","[oOo]"}
 
--- Constants
+-- Constants that may not be changed
 activityCounter = 1
-quit = false
 quit = false
 startTime = timestamp()
 statistics = {}
@@ -107,16 +108,72 @@ reverseDirs[3] = 1
 reverseDirs[4] = 5
 reverseDirs[5] = 4 
 
+--
+-- Error Stuff
+--
+
+-- TODO: I am not sure if this makes sense - shouldn't all unknown errors be bugs?
+unknownErrorString = "UNKOWN ERROR"
+-- Th
+fatalErrorString = "FATAL ERROR"
+
+-- Hard errors/bugs, stuff that makes the stuff crash that keeps stuff from crashing
+-- We don't really handle these, because this is what happens when error handling
+-- goes down for example. And lets not get into error-handling-handling-handling...
+-- quite so soon.
+dieErrorString = "DIE"
+
+_error = false
+_errorDone = false 
+
+function die(msg)
+	_errorStart()
+	term.clear()
+	term.setCursorPos(1,1)
+	print(dieErrorString..": "..msg)
+	sleep(10)
+	os.shutdown()
+end
+
 function log(msg)
---	print("log #############")
-	local logfile = io.open("./log_"..id,"a") 
+	local logfile = io.open(logFileName,"a") 
+	
+	if logfile == nil then
+		logfile = io.open(logFileName,"w") 
+	end
 	if logfile ~= nil then
 		logfile:write(msg.."\n")
 		logfile:close()
 	else	
-		print("FATAL: Could not open logfile 'log_ID'.")
-		shell.exit(1)
+		bug("Could not open logfile '"..logFileName.."' for writing or appending.\nPlease check permissions on ComputerCraft directories.\n")
 	end
+end
+
+function _errorStart()
+	_error = true
+	quit = true
+	sleep(1)
+end
+function _errorEnd()
+	sleep(1)
+	_errorDone = true
+	shell.exit(1)
+end
+function err(e)
+	_errorStart()
+	local msg = unknownErrorString
+	if type(e) ~= "string" then
+		e = textutils.serialize(e)
+	end
+	msg = fatalErrorString..":\n"..e.."\n"
+	msg = msg..debug.currentFunction().."\n"
+
+	term.clear()
+	term.setCursorPos(1,1)
+	print(msg)
+	msg = msg.."\n"..debug.traceback("",1).."\n\n"
+	log(msg)
+	_errorEnd()
 end
 
 function setSystemType(t)
@@ -235,28 +292,6 @@ function status(callDepth,msg,doPrint)
 --	_status = _status or {}
 	_status[callDepth] = __status
 --	log(textutils.serialize(_status))
-end
-
-_error = false
-_errorDone = false 
-function err(e)
-	_error = true
-	local msg = unknownErrorString
-	if type(e) ~= "string" then
-		e = textutils.serialize(e)
-	end
-	msg = fatalErrorString..":\n"..e.."\n"
-	msg = msg..debug.currentFunction().."\n"
-	quit = true
-	sleep(1)
-	term.clear()
-	term.setCursorPos(1,1)
-	print(msg)
-	msg = msg.."\n"..debug.traceback("",1).."\n\n"
-	log(msg)
-	sleep(1)
-	_errorDone = true
-	shell.exit(1)
 end
 
 -- Right now only works with number-values
@@ -424,9 +459,9 @@ end
 
 -- Loads the configuration from disk
 function loadConfig()
-	local file = fs.open(configFile , "r")	
+	local file = fs.open(configFileName , "r")	
 	if file ~= nil then
-		print("Loading "..fs.getSize(configFile).." bytes of config data...")
+		print("Loading "..fs.getSize(configFileName).." bytes of config data...")
 		local config = textutils.unserialize(file.readAll())
 		if config == nil or type(config) ~= "table" then
 			status(-100,"WARN: Could not unserialize config file.")
@@ -447,14 +482,14 @@ function saveConfig(callDepth,configOverride)
 	callDepth = callDepth or -20
 	status(callDepth,"saving config ... ")
 	--debug(callDepth)
-	local file = fs.open(configFile , "w")
+	local file = fs.open(configFileName , "w")
 	if file ~= nil then
 		file.write(textutils.serialize(config))
 		file.close()
 		return true
 	else
-		print("FATAL: Could not write config '"..configFile.."'.")
-		err("FATAL: Could not write config '"..configFile.."'.")
+		print("FATAL: Could not write config '"..configFileName.."'.")
+		err("FATAL: Could not write config '"..configFileName.."'.")
 		--print(""..nil)
 		--quit = true
 		return false

@@ -39,7 +39,9 @@ function run()
 			str = "{"
 			for k,v in pairs(data) do
 				str = str.."\""..k.."\": [ "
+				if v[1] ~= nil then
 				v[1] = string.gsub(v[1],'"',"'")
+				end
 				if v ~= nil and v[1] ~= nil and v[2] ~= nil and v[2]["uptime"] ~= nil then
 					str = str.."\""..v[1].." up: "..v[2]["uptime"].."s\","
 				elseif v ~= nil and v[1] ~= nil then

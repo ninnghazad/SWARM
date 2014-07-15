@@ -178,6 +178,7 @@ function run()
 	swarm.statistics["Failed Jobs"] = 0
 	swarm.statistics["Suggested Jobs"] = 0
 	swarm.statistics["Loaded Jobs"] = 0
+	swarm.statistics["No Jobs"] = 0
 	
 	-- Open modem
 	swarm.openModem()
