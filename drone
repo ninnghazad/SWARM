@@ -483,7 +483,7 @@ function broadcast()
 	navmap:set(pos[1],pos[2],pos[3],{swarm.timestamp(),{0,1}})
 	msg = "{"..(pos[1])..","..(pos[2])..","..(pos[3])..","..(string.format("%q",swarm.__status))..',["unloaded"]='..(unloaded)..',["uptime"]='..((swarm.timestamp()-startTime)/20).."}"
 	rednet.broadcast(string.char(10)..msg)
-	os.setComputerLabel("drone "..id..": hello there!")
+	os.setComputerLabel("drone "..id.." "..swarm.activityIndicator())
 	--print(textutils.serialize(_status))
 	return true
 end
@@ -877,9 +877,9 @@ function unload(callDepth,dir)
 	local count = 0
 	for n=1,16,1 do
 		count = turtle.getItemCount(n)
-		if config["digArea_ignoreSlots"] ~= nil then
-			for i = 1,#config["digArea_ignoreSlots"],1 do
-				if config["digArea_ignoreSlots"][i] == n then
+		if config["ignoreSlots"] ~= nil then
+			for i = 1,#config["ignoreSlots"],1 do
+				if config["ignoreSlots"][i] == n then
 					count = 0
 					break
 				end
@@ -996,16 +996,16 @@ function needToUnload()
 	if stacks >= 16 then
 		-- if dropIgnoreSlots is set, we will drop all items that we had to dig but didnt want to
 		-- we also drop all but one of the items in the ignoreslots in this case
-		if config["digArea_dropIgnoreSlots"] == true and config["digArea_ignoreSlots"] ~= nil and #config["digArea_ignoreSlots"] > 0 then
+		if config["digArea_dropIgnoreSlots"] == true and config["ignoreSlots"] ~= nil and #config["ignoreSlots"] > 0 then
 			local skip = false
-			for j = 1,#config["digArea_ignoreSlots"],1 do
-				select(config["digArea_ignoreSlots"][j])
+			for j = 1,#config["ignoreSlots"],1 do
+				select(config["ignoreSlots"][j])
 				for k = 1,16,1 do
 					count = turtle.getItemCount(k)
 					if count > 0 then
 						skip = false
-						for l = 1,#config["digArea_ignoreSlots"],1 do
-							if config["digArea_ignoreSlots"][l] == k then
+						for l = 1,#config["ignoreSlots"],1 do
+							if config["ignoreSlots"][l] == k then
 								skip = true
 								break
 							end
@@ -1018,9 +1018,9 @@ function needToUnload()
 						end
 					end
 				end
-				if turtle.getItemCount(config["digArea_ignoreSlots"][j]) > 1 then
-					select(config["digArea_ignoreSlots"][j])
-					dropDir(5,turtle.getItemCount(config["digArea_ignoreSlots"][j])-1)
+				if turtle.getItemCount(config["ignoreSlots"][j]) > 1 then
+					select(config["ignoreSlots"][j])
+					dropDir(5,turtle.getItemCount(config["ignoreSlots"][j])-1)
 				end
 			end
 
@@ -1451,9 +1451,9 @@ function digArea(posMin,posMax,callDepth)
 			--sleep(0) -- MARKMARK
 			if z < posMax[3] and detectDir(4) == 1 then
 				dig = true
-				if config["digArea_ignoreSlots"] ~= nil then
-					for j = 1,#config["digArea_ignoreSlots"],1 do
-						turtle.select(config["digArea_ignoreSlots"][j])
+				if config["ignoreSlots"] ~= nil then
+					for j = 1,#config["ignoreSlots"],1 do
+						turtle.select(config["ignoreSlots"][j])
 						if compareDir(4) then
 							dig = false
 							break
@@ -1469,9 +1469,9 @@ function digArea(posMin,posMax,callDepth)
 			end
 			if z > posMin[3] and detectDir(5) == 1 then
 				dig = true
-				if config["digArea_ignoreSlots"] ~= nil then
-					for i = 1,#config["digArea_ignoreSlots"],1 do
-						turtle.select(config["digArea_ignoreSlots"][i])
+				if config["ignoreSlots"] ~= nil then
+					for i = 1,#config["ignoreSlots"],1 do
+						turtle.select(config["ignoreSlots"][i])
 						if compareDir(5) then
 							dig = false
 							break
