@@ -9,8 +9,10 @@ version = "0.1"
 os.loadAPI("swarm")
 swarm.setSystemType("drone")
 
+
+
 DRONE_MAP_CACHE_TIMEOUT = 12000
-DRONE_LONGLOOP_YIELD_COUNT = 100
+DRONE_LONGLOOP_YIELD_COUNT = 1
 quit = false
 abort = false
 unloaded = 0
@@ -41,6 +43,7 @@ config["mapServerID"] = 43
 config["homePos"] =	{6,6,6,0}
 config["storagePos"] =	{6,6,6,1}
 config["jobPos"] =	{6,6,6,2}
+
 
 
 
@@ -219,16 +222,17 @@ function calibrateSub(callDepth,turns)
 		x,y,z = gps.locate(1,true)
 		sleep(1)
 	end
+	print("...")
 	local xPos,yPos,zPos = 0,0,0
 	local up = true
 	if not turtle.forward() then
 		-- maybe no fuel!
 		if x ~= nil then -- we have gps?!
-			if turtle.getFuelLevel() == 0 then
+			if getFuelLevel() == 0 then
 				swarm.status(callDepth,"orienting: out of fuel, trying to refuel...",true)
 				swarm.status(callDepth,"refueled "..consumeAllFuel(callDepth+1).." fuels.",true)
 				
-				if turtle.getFuelLevel() == 0 then
+				if getFuelLevel() == 0 then
 					swarm.status(callDepth,"orienting: out of fuel at "..x..","..y..","..z.." - NEED HELP!")
 					return -2
 				end
@@ -289,18 +293,20 @@ function calibrate(callDepth)
 	local back = ""
 	while m ~= 1 do
 		if m == -2 then
-			swarm.status(callDepth,"orienting: no gps signal, waiting!")
+			swarm.status(callDepth,"orienting: no gps signal, waiting!",true)
 			sleep(4)
 		elseif m == -3 then
-			swarm.status(callDepth,"orienting: no fuel, waiting")
+			swarm.status(callDepth,"orienting: no fuel, waiting",true)
 			sleep(4)
 		else
-			swarm.status(callDepth,"orienting: got gps, trying")
+			swarm.status(callDepth,"orienting: got gps, trying",true)
 			
 			if turns < 4 then
+				print(0)
 				turtle.turnRight()
+				print(1)
 				turns = turns + 1
-				
+				print(2)
 			else
 				turns = 0
 				if up then
@@ -309,14 +315,16 @@ function calibrate(callDepth)
 					end
 				else
 					if not turtle.down() then
-						swarm.status(callDepth,"orienting: stuck @ "..x..","..y..","..z.." - NEED HELP!")
+						swarm.status(callDepth,"orienting: stuck @ "..x..","..y..","..z.." - NEED HELP!",true)
 						up = true
 					end
 				end
 			end
+			print(3)
 		end
+		print("...")
 		m = calibrateSub(callDepth+1,turns)
-		--sleep(0) -- MARKMARK
+ 		sleep(0) -- MARKMARK
 	end
 	
 	
@@ -928,7 +936,6 @@ function moveTo(target,retries,callDepth)
 	end
 	
 	if r then
-		swarm.log(textutils.serialize(target))
 		-- Only rotate to the specified direction if 
 		-- we have moved successfully
 		if target[4] ~= nil and target[5] == nil then
@@ -1677,7 +1684,9 @@ end
 function main()
 	swarm.status(-1000,"main() started",true)
 	callDepth = 1
-
+	
+	
+	
 	config["jobServerID"] = 25
 	config["jobPos"] = config["homePos"]
 	local e,msg,func,r,error
@@ -1775,10 +1784,13 @@ end
     The one and only: run()
 --]]
 function run()
+	-- this sleep seems to solve some strange random-hang problems at startup, just leave it for now
+	sleep(1)
+	
 	callDepth = 0
 	term.clear()
 	term.setCursorPos(1,1)
-		
+	swarm.log(swarm.label.." is booting")
 	if peripheral.getType("left") == "Miny Chunky Module" then
 		print("Using the fabulous Miny Chunky Module!")
 		useMinyMod = true
@@ -1786,8 +1798,9 @@ function run()
 		digDir = digDirMiny
 	end
 	
-	print("Trying to calibrate (fuel: "..turtle.getFuelLevel()..") ...")
-	while turtle.getFuelLevel() < 2 do
+	print("Trying to calibrate (fuel: "..getFuelLevel()..") ...")
+	while getFuelLevel() < 2 do
+		print("...")
 		swarm.status(callDepth,"PROBLEM: Not enough fuel to calibrate, gimme some!",true)
 		-- TODO: broadcast status with gps pos without heading as an SOS
 		sleep(1)
@@ -1796,13 +1809,12 @@ function run()
 
 	-- Orient ourselfes using GPS
 	while not calibrate(0) do
+		print("...")
 		swarm.status(callDepth,"PROBLEM: No GPS signal!",true)
 		-- TODO: broadcast some kind of SOS?!
 		sleep(1)
-		return
 	end
-	
-	
+
 	-- Open modem
 	swarm.openModem()
 
@@ -1844,7 +1856,7 @@ function run()
 		return
 	end
 
-	-- Get global environment so we can pass it to the job-script
+	-- Get global environment
 	env = getfenv()
 	--env.textutils = textutils
 

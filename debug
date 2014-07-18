@@ -1,5 +1,5 @@
 --debug
-local debug={}
+debug={}
 local error=_G._error or _G.error
 
 local function wrap(text, limit) --from Kingdaroo
@@ -23,7 +23,7 @@ local function wrap(text, limit) --from Kingdaroo
 				return lines
 end
 
-function debug.step_print(s,_term)
+function step_print(s,_term)
 	local term=_term or term
 	local x,y=term.getSize()
 	y=y-1
@@ -41,18 +41,17 @@ function debug.step_print(s,_term)
 	write('\n')
 end
 
-function debug.printError( ... )
+function printError( ... )
 	if term.isColour() then
 		term.setTextColour( colours.red )
 	end
 	local t={...}
 	for i=1,#t do t[i]=tostring(t[i]) end
-	debug.step_print(table.concat(t,''),term)
+	step_print(table.concat(t,''),term)
 	term.setTextColour( colours.white )
 end
 
 
-do
 	--[[ Notes:
 	getfenv(1)=getfenv()~=getfenv(0)~~_G
 	error('',1)~=error('',0)
@@ -68,7 +67,7 @@ do
 			return nil, "File not found"
 		end)
 		
-	local traceback=function(level,terr)
+	local ttraceback=function(level,terr)
 		local terr=terr or {}
 		local passed={}
 		local err,ok=terr
@@ -181,34 +180,31 @@ do
 		return ts
 	end
 
-	function debug.currentFunction()
+	function currentFunction()
 		local path,dir,name
-		local r = format_traceback(traceback(0,{}),0,true)
+		local r = format_traceback(ttraceback(0,{}),0,true)
 		r[#r] = nil
 		r = r[#r]
 		return r
 	end
-	function debug.traceback(msg,level)
+	function traceback(msg,level)
 		local level=level or 0
-		msg= msg or 'debug.traceback' 
-		local ts=format_traceback(traceback(level+1,{}),1,false)
+		msg= msg or 'traceback' 
+		local ts=format_traceback(ttraceback(level+1,{}),1,false)
 		table.insert(ts,1,msg)
 		msg = table.concat(ts,'\n')
 		msg = string.gsub(msg, "\n\n", "\n")
 		return msg
 	end
 
-	function debug.printTraceback(msg,level)
-		debug.printError(debug.traceback(msg,(level or 0)+1))
+	function printTraceback(msg,level)
+		printError(traceback(msg,(level or 0)+1))
 	end
 
-end
 
-function debug.override()
+
+function override()
 	rawset(_G,'_error',error)
-	rawset(_G,'error',debug.traceback)
-	rawset(_G,'printError',debug.printError)
+	rawset(_G,'error',traceback)
+	rawset(_G,'printError',printError)
 end
-
-
-return debug

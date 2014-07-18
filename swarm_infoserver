@@ -10,7 +10,6 @@
 
 os.loadAPI("infoserver") -- includes swarm api
 
-swarm.debug.override()
 swarm.status(0,"\ninfoserver "..os.getComputerID().." '"..os.getComputerLabel().."' booting...\n")
 
 infoserver.run()

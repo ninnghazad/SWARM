@@ -19,8 +19,9 @@
 
 swarm = {}
 
-debug = dofile("debug")
+os.loadAPI("debug")
 debug.override()
+
 
 os.loadAPI("map")
 os.loadAPI("heap")
@@ -37,6 +38,7 @@ configFileName = "config_"..id
 logFileName = "log_"..id
 guiUpdateInterval = 1
 
+env = getfenv()
 
 -- Constants that may be changed
 activityIndicatorString = {"[Ooo]","[oOo]","[ooO]","[oOo]"}
@@ -145,7 +147,7 @@ function log(msg)
 		logfile:write(msg.."\n")
 		logfile:close()
 	else	
-		bug("Could not open logfile '"..logFileName.."' for writing or appending.\nPlease check permissions on ComputerCraft directories.\n")
+		die("Could not open logfile '"..logFileName.."' for writing or appending.\nPlease check permissions on ComputerCraft directories.\n")
 	end
 end
 
@@ -157,7 +159,7 @@ end
 function _errorEnd()
 	sleep(1)
 	_errorDone = true
-	shell.exit(1)
+	os.shutdown()
 end
 function err(e)
 	_errorStart()
@@ -165,9 +167,10 @@ function err(e)
 	if type(e) ~= "string" then
 		e = textutils.serialize(e)
 	end
+	
 	msg = fatalErrorString..":\n"..e.."\n"
-	msg = msg..debug.currentFunction().."\n"
-
+	--msg = msg..debug.currentFunction().."\n"
+	
 	term.clear()
 	term.setCursorPos(1,1)
 	print(msg)
@@ -294,7 +297,6 @@ function status(callDepth,msg,doPrint)
 --	log(textutils.serialize(_status))
 end
 
--- Right now only works with number-values
 textutils.serializeMap = function( t )
 	if type(t) == "number" then return tostring(t) end
 	sleep(0)
@@ -306,13 +308,22 @@ textutils.serializeMap = function( t )
 end
 
 function wrap(func,name)
-	local r = xpcall(func,wrapError)
+	--local r = xpcall(func,err)
+	local function ferr(e)
+		err(e)
+	end
+	--setfenv(ferr,env)
+	--setfenv(func,env)
+	local r = xpcall(func,ferr)
+	--[[
 	while r ~= true do
 		-- r ~= true and r~= false means that the function was a success, but still wants to be called again
-		
+		print("wrap returned: "..textutils.serialize(r))
 		sleep(0)
-		r = xpcall(func,err)
+		r = xpcall(func,ferr)
+		
 	end
+	--]]
 	while _error and not _errorDone do
 		sleep(1)
 	end
@@ -335,12 +346,14 @@ function reverse(tab)
 	end
 	return out
 end
+-- reverse table quickly in place
 function reverseInplace(tab)
      local l = #tab+1
      for i=1, (l-1)*.5 do
           t[i], t[l-i] = t[l-i], t[i]
      end
 end
+-- compare tables quickly
 function compare(a,b)
 	for i = 1,#a,1 do
 		if b[i] == nil or  a[i] ~= b[i] then
@@ -349,8 +362,8 @@ function compare(a,b)
 	end
 	return true
 end
--- Our heuristic distance functions, both for point-to-point and point-to-area distance
 
+-- Our heuristic distance functions, both for point-to-point and point-to-area distance
 function manhattanDistance(pos1,pos2,pos3)
 	if pos3 == nil or compare(pos2,pos3) then
 		return math.abs(pos1[1]-pos2[1])+math.abs(pos1[2]-pos2[2])+math.abs(pos1[3]-pos2[3])
@@ -396,7 +409,7 @@ function heuristicDistance(pos1,pos2,pos3)
 	return manhattanDistance(pos1,pos2,pos3) --+ chebyshevDistance(pos1[1],pos1[2],pos1[3],pos2[1],pos2[2],pos2[3])
 end
 
--- This reverse a path, so we can use known paths both ways more easily
+-- This reverses a path, so we can use known paths both ways more easily.
 function reversePath(path)
 	local r = {}
 	for k,v in pairs(reverse(path)) do

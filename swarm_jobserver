@@ -10,7 +10,7 @@
 
 os.loadAPI("jobserver") -- includes swarm api
 
-swarm.debug.override()
+
 swarm.status(0,"\njobserver "..os.getComputerID().." '"..os.getComputerLabel().."' booting...\n")
 
 jobserver.run()

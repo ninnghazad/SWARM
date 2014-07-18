@@ -1,5 +1,5 @@
 {
-  digArea_ignoreSlots = {
+  ignoreSlots = {
     1,
     2,
   },
@@ -19,5 +19,5 @@
   loopJob = false,
   mapServerID = 26,
   dropRemainingFuelToStoragePos = true,
-  digArea_dropIgnoreSlots = true,
+  dropIgnoreSlots = true,
 }

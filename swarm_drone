@@ -141,7 +141,6 @@
 
 os.loadAPI("drone") --includes swarm api
 
-swarm.debug.override()
 swarm.status(0,"\ndrone "..os.getComputerID().." '"..os.getComputerLabel().."' booting...\n")
 
 drone.run()
