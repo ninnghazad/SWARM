@@ -51,9 +51,9 @@ end
 
 swarm.installFiles(files)
 swarm.replaceFile("swarm_"..mode,targetDir.."/startup")
-swarm.replaceFile("swarm_config_"..mode,targetDir.."/config_"..os.getComputerID())
+swarm.replaceFile("swarm_config_"..mode,targetDir.."/"..swarm.configFileName)
 os.setComputerLabel(mode.." "..os.getComputerID())
 print("")
 print(infos[mode])
-print("Don't forget to 'edit config_"..os.getComputerID().."'!")
+print("Don't forget to 'edit "..swarm.configFileName.."'!")
 print("To update type 'installer "..mode.."' again.")
