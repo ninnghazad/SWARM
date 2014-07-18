@@ -1,0 +1,30 @@
+os.loadAPI("swarm")
+print("SWARM installer")
+
+local mode = argv[1] or nil
+local files = {
+	"drone":{"drone","swarm","debug","map","heap","swarm_drone"},
+	"mapserver":{"mapserver","swarm","debug","map","heap","swarm_mapserver"},
+	"jobserver":{"jobserver","swarm","debug","map","heap","swarm_jobserver"},
+	"infoserver":{"infoserver","swarm","debug","map","heap","swarm_infoserver"},
+}
+local infos = {
+	"drone":{"Installer finished, place drone in homePos an boot it. Then change the config, if you want, and reboot it again."},
+	"mapserver":{"Installer finished, type startup to start mapserver."},
+	"jobserver":{"Installer finished, type startup to start jobserver."},
+	"infoserver":{"Installer finished, type startup to start infoserver."},
+}
+
+if mode == nil then
+	print("Please specifiy a package to install as first argument: ")
+	for k,v in pairs(files) do
+		print("\t"..k)
+	end
+end
+
+swarm.installFiles(files)
+swarm.replaceFile("/disk/swarm_"..mode,"/startup")
+swarm.replaceFile("/disk/swarm_config_"..mode,"/config_"..os.getComputerID())
+os.setComputerLabel(mode.." "..os.getComputerID())
+print(infos[mode])
+print("Don't forget to 'edit config_"..os.getComputerID().."'!)

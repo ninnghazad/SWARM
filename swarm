@@ -556,3 +556,15 @@ function getDirection(xDir , yDir , zDir)
 	end
 end
 
+function replaceFile(src,dst)
+	if fs.exists(dst) then
+		fs.delete(dst)
+	end
+	fs.copy(src,dst)
+end
+
+function installFiles(files)
+	for i = 1,#files,1 do
+		swarm.replaceFile("/disk/"..files[i],"/"..files[i])
+	end
+end

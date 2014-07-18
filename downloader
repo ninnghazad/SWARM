@@ -5,12 +5,21 @@ local files = {
 	"heap",
 	"swarm",
 	"drone",
-	
-	"swarm_install_drone",
+	"installer",
 	"swarm_config_drone",
+	"swarm_config_mapserver",
+	"swarm_config_infoserver",
+	"swarm_config_jobserver",
+	"swarm_startup_drone",
+	"swarm_startup_mapserver",
+	"swarm_startup_infoserver",
+	"swarm_startup_jobserver",
 	"swarm_drone",
-	
+	"swarm_mapserver",
+	"swarm_jobserver",
+	"swarm_infoserver",
 }
+
 local r,i,f,fn
 for i,fn in pairs(files) do
 	r = http.get(url..fn)
@@ -28,9 +37,5 @@ end
 
 term.clear()
 term.setCursorPos(1,1)
-print("All downloads finished.\n\nTo install type one of:")
-print("\tswarm_install_drone")
-print("\tswarm_install_mapserver")
-print("\tswarm_install_jobserver")
-print("\tswarm_install_infoserver")
-print("\nTo just use the accompanying tools,\nno install is necessary.")
+print("All downloads finished.\n\nType installer to install stuff.")
+print("\nTo just use the accompanying tools,\nno install is necessary.\nJust copy them whereever.")
