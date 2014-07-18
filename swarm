@@ -134,7 +134,7 @@ function die(msg)
 	term.setCursorPos(1,1)
 	print(dieErrorString..": "..msg)
 	sleep(10)
-	os.shutdown()
+	shell.exit(1)
 end
 
 function log(msg)
