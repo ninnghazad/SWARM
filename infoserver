@@ -10,31 +10,30 @@ swarm.setSystemType("infoserver")
 -- Settings:
 local url = "http://dunkelraum.net/share/alphaomega.php"
 
+
+	local width,height = term.getSize()
+	local scrollPosX = 1
+	local scrollPosY = 1
+	local data = {}
 -- Code:
-function run()
+function main()
 	swarm.openModem()
 	local t = os.startTimer(4)
-	local e,msg,data,r
-	data = {}
+	local e,msg,r
 	local str = ""
 	local startTime = os.clock()
-	local lastTime = startTime
-
+	
 	-- Initial request of drone stati
 	rednet.broadcast(string.char(100))
 	rednet.broadcast(string.char(120))
-
-
-
+	local request = nil
 	-- Event loop, run forever
 	while true do
 		e = {os.pullEvent()}
-		if e[1] == "key" then -- Handle key-presses
-			if e[2] == 16 then
-				print("Q pressed, quitting...")
-				break
-			end
+	if e[1] == "http_success" or e[1] == "http_failure" then
+			request = nil
 		elseif e[1] == "timer" and e[2] == t then -- Timed send of data to webserver
+			continue
 			-- JSON-Encode the data to be send
 			str = "{"
 			for k,v in pairs(data) do
@@ -68,15 +67,17 @@ function run()
 			end
 			str = string.sub(str,1,#str-1).."}"
 			
-			-- Actually send the data
-			http.post(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
-			
-			-- Request some more status updates from drones in the area
-			rednet.broadcast(string.char(100))
-			rednet.broadcast(string.char(120))
-			
+			if request == nil then
+				-- Actually send the data
+				--http.post(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
+				request = http.request(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
+				
+				-- Request some more status updates from drones in the area
+				rednet.broadcast(string.char(100))
+				rednet.broadcast(string.char(120))
+			end
 			-- Restart timer
-			t = os.startTimer(1)
+			t = os.startTimer(4)
 			
 		elseif e[1] == "rednet_message" and e[3]:byte(1) == 101 then -- Receive current status 
 			if data[e[2]] == nil then
@@ -95,20 +96,62 @@ function run()
 			data[e[2]][2] = textutils.unserialize(string.sub(e[3],2))
 		end
 		
-		-- Update local display once a second
-		if (os.clock() - lastTime) > 1.0 then
-			term.setCursorPos(1,1)
-			term.clear()
-			print(swarm.getInfoString().." "..swarm.activityIndicator())
-			print("Received data from ids:")
-			
-			local tmp = {}
-			
-			for k,v in pairs(data) do
-				io.write(k.." ")
-				
-			end	
-			lastTime = os.clock()
-		end
 	end
+end
+function key()
+	local e
+	while true do
+		e = {os.pullEvent("key")}
+		if e[2] == 16 then
+			print("Q pressed, quitting...")
+			break
+		elseif e[2] == 200 then
+			scrollPosY = math.min(swarm.countArray(data)-(height-2),scrollPosY + 1)
+		elseif e[2] == 208 then
+			scrollPosY = math.max(1,scrollPosY - 1)
+		elseif e[2] == 205 then
+			scrollPosX = math.min(256,scrollPosX + 1)
+		elseif e[2] == 203 then
+			scrollPosX = math.max(1,scrollPosX - 1)
+		end
+	
+	end
+end
+function gui()
+	while true do
+		term.setCursorPos(1,1)
+		term.clear()
+		print(swarm.getInfoString().." "..swarm.activityIndicator())
+		print("Press arrows to scroll, q to quit. ["..scrollPosX.."x"..scrollPosY.."]")
+		local tmp,n,i
+		
+		i = 0
+		for k,v in pairs(data) do
+			if i >= scrollPosY then
+				tmp = k..": "
+				n = width - #tmp
+				
+				io.write(tmp)
+				if type(v) == "table" then
+					for kk,vv in pairs(v) do
+						if type(vv) == "table" then
+							io.write(string.sub(vv[#vv],scrollPosX,n+scrollPosX-1))
+						end
+						
+					end
+				end
+				io.write("\n")
+			end
+			i = i + 1
+		end	
+		-- Update local display at 5 fps
+		sleep(0.2)
+	end
+end
+
+function run()
+	function wrapMain() return swarm.wrap(main,"main") end 
+	function wrapGui() return swarm.wrap(gui,"gui") end 
+	function wrapKeyboard() return swarm.wrap(key,"keyboard handler") end 
+	parallel.waitForAny(wrapMain,wrapGui,wrapKeyboard)
 end

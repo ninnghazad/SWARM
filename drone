@@ -12,7 +12,7 @@ swarm.setSystemType("drone")
 
 
 DRONE_MAP_CACHE_TIMEOUT = 12000
-DRONE_LONGLOOP_YIELD_COUNT = 1
+DRONE_LONGLOOP_YIELD_COUNT = 100
 quit = false
 abort = false
 unloaded = 0
