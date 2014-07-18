@@ -1,5 +1,7 @@
 os.loadAPI("swarm")
-print("SWARM installer")
+local url = "https://raw.githubusercontent.com/ninnghazad/SWARM/master/"
+
+print("SWARM installer - will download from "..url)
 
 local mode = argv[1] or nil
 local files = {
@@ -21,6 +23,25 @@ if mode == nil then
 		print("\t"..k)
 	end
 end
+
+for i,fn in pairs(files[mode]) do
+	r = http.get(url..fn)
+	if r then
+		r = r.readAll()
+		f = io.open("./"..fn,"w")
+		f:write(r)
+		f:close()
+		print("Downloaded successfully: "..fn)
+	else
+		print("Could not download "..url..fn)
+		os.exit(true)
+	end
+end
+
+term.clear()
+term.setCursorPos(1,1)
+print("All downloads finished.\n\nType installer to install stuff.")
+print("\nTo just use the accompanying tools,\nno install is necessary.\nJust copy them whereever.")
 
 swarm.installFiles(files)
 swarm.replaceFile("/disk/swarm_"..mode,"/startup")
