@@ -1847,6 +1847,8 @@ function run()
 		--config["jobPos"] = {pos[1],pos[2],pos[3],swarm.getDirection(xDir,yDir,zDir)}
 		swarm.saveConfig(callDepth+1,config)
 		
+		term.clear()
+		term.setCursorPos(1,1)
 		print("Could not find config, created a new one.")
 		print("All positions set to current drone position.")
 		print("Please change '"..swarm.configFileName.."' according")
