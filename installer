@@ -5,7 +5,7 @@ local url = "https://raw.githubusercontent.com/ninnghazad/SWARM/master/"
 
 term.clear()
 term.setCursorPos(1,1)
-os.loadAPI("swarm")
+
 print("SWARM installer\n")
 
 local files = {
@@ -48,6 +48,8 @@ for i,fn in pairs(files[mode]) do
 		os.exit(true)
 	end
 end
+os.loadAPI("swarm")
+
 
 swarm.installFiles(files)
 swarm.replaceFile("swarm_"..mode,targetDir.."/startup")

@@ -557,6 +557,10 @@ function getDirection(xDir , yDir , zDir)
 end
 
 function replaceFile(src,dst)
+	if not fs.exists(src) then
+		fs.delete()
+		err("Source file '"..src.."' does not exists.")
+	end
 	if fs.exists(dst) then
 		fs.delete(dst)
 	end
