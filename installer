@@ -1,28 +1,39 @@
-os.loadAPI("swarm")
+local targetDir = "/"
 local url = "https://raw.githubusercontent.com/ninnghazad/SWARM/master/"
 
-print("SWARM installer - will download from "..url)
+--
 
-local mode = argv[1] or nil
+term.clear()
+term.setCursorPos(1,1)
+os.loadAPI("swarm")
+print("SWARM installer\n")
+
 local files = {
 	["drone"] = {"drone","swarm","debug","map","heap","swarm_drone"},
-	[mapserver] = {"mapserver","swarm","debug","map","heap","swarm_mapserver"},
-	[jobserver] = {"jobserver","swarm","debug","map","heap","swarm_jobserver"},
-	[infoserver] = {"infoserver","swarm","debug","map","heap","swarm_infoserver"}
-}
-local infos = {
-	[drone] = {"Installer finished, place drone in homePos an boot it. Then change the config, if you want, and reboot it again."},
-	[mapserver] = {"Installer finished, type startup to start mapserver."},
-	[jobserver] = {"Installer finished, type startup to start jobserver."},
-	[infoserver] = {"Installer finished, type startup to start infoserver."}
+	["mapserver"] = {"mapserver","swarm","debug","map","heap","swarm_mapserver"},
+	["jobserver"] = {"jobserver","swarm","debug","map","heap","swarm_jobserver"},
+	["infoserver"] = {"infoserver","swarm","debug","map","heap","swarm_infoserver"},
+	["tools"] = {"swarm_pmon","swarm_ploc","swarm_status","swarm_reboot","swarm_hardreboot","swarm_shutdown","job"}
 }
 
-if mode == nil then
-	print("Please specifiy a package to install as first argument: ")
+local infos = {
+	["drone"] = "Installer finished, place drone in homePos an boot it. Then change the config, if you want, and reboot it again.",
+	["mapserver"] = "Installer finished, type startup to start mapserver.",
+	["jobserver"] = "Installer finished, type startup to start jobserver.",
+	["infoserver"] = "Installer finished, type startup to start infoserver.",
+	["tools"] = "Installer finished, type ls to see installed tools."
+}
+
+local mode = {...}
+if mode == nil or #mode ~= 1 or files[mode[1]] == nil then
+	print("Please specifiy a package to install\nas only argument: ")
 	for k,v in pairs(files) do
 		print("\t"..k)
 	end
+	return
 end
+mode = mode[1]
+print("Will download and install "..mode)
 
 for i,fn in pairs(files[mode]) do
 	r = http.get(url..fn)
@@ -38,14 +49,11 @@ for i,fn in pairs(files[mode]) do
 	end
 end
 
-term.clear()
-term.setCursorPos(1,1)
-print("All downloads finished.\n\nType installer to install stuff.")
-print("\nTo just use the accompanying tools,\nno install is necessary.\nJust copy them whereever.")
-
 swarm.installFiles(files)
-swarm.replaceFile("/disk/swarm_"..mode,"/startup")
-swarm.replaceFile("/disk/swarm_config_"..mode,"/config_"..os.getComputerID())
+swarm.replaceFile("swarm_"..mode,targetDir.."/startup")
+swarm.replaceFile("swarm_config_"..mode,targetDir.."/config_"..os.getComputerID())
 os.setComputerLabel(mode.." "..os.getComputerID())
+print("")
 print(infos[mode])
-print("Don't forget to 'edit config_"..os.getComputerID().."'!)
+print("Don't forget to 'edit config_"..os.getComputerID().."'!")
+print("To update type 'installer "..mode.."' again.")

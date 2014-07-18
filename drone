@@ -1849,7 +1849,7 @@ function run()
 		
 		print("Could not find config, created a new one.")
 		print("All positions set to current drone position.")
-		print("Please change '"..swarm.configFile.."' according")
+		print("Please change '"..swarm.configFileName.."' according")
 		print("to your needs and reboot this ")
 		
 		--sleep(60)

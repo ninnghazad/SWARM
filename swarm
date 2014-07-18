@@ -565,6 +565,6 @@ end
 
 function installFiles(files)
 	for i = 1,#files,1 do
-		swarm.replaceFile("/disk/"..files[i],"/"..files[i])
+		swarm.replaceFile(files[i],"/"..files[i])
 	end
 end
