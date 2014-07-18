@@ -558,7 +558,7 @@ end
 
 function replaceFile(src,dst)
 	if not fs.exists(src) then
-		err("Source file '"..src.."' does not exists.")
+		err("Source file '"..textutils.serialize(src).."' does not exists.")
 	end
 	if fs.exists(dst) then
 		fs.delete(dst)
