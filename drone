@@ -1849,10 +1849,10 @@ function run()
 		
 		term.clear()
 		term.setCursorPos(1,1)
-		print("Could not find config, created a new one.")
-		print("All positions set to current drone position.")
+		print("Could not find working config,\ncreated a default one.")
+		print("All positions set to current position.")
 		print("Please change '"..swarm.configFileName.."' according")
-		print("to your needs and reboot this ")
+		print("to your needs and type startup.")
 		
 		--sleep(60)
 		return
