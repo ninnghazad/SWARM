@@ -12,7 +12,7 @@ local files = {
 	["drone"] = {"drone","swarm","debug","map","heap","swarm_drone","swarm_config_drone"},
 	["mapserver"] = {"mapserver","swarm","debug","map","heap","swarm_mapserver","swarm_config_mapserver"},
 	["jobserver"] = {"jobserver","swarm","debug","map","heap","swarm_jobserver","swarm_config_jobserver"},
-	["infoserver"] = {"infoserver","swarm","debug","map","heap","swarm_infoserver",swarm_config_infoserver"},
+	["infoserver"] = {"infoserver","swarm","debug","map","heap","swarm_infoserver","swarm_config_infoserver"},
 	["tools"] = {"swarm_pmon","swarm_ploc","swarm_status","swarm_reboot","swarm_hardreboot","swarm_shutdown","job"}
 }
 
