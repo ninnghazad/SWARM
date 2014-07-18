@@ -1155,8 +1155,7 @@ function recharge(callDepth,dir)
 				break
 			end
 			fuelPerItem = fuelPerItem - getFuelLevel()
-			turtle.refuel(math.max(1,math.min(turtle.getItemCount(16),(getFuelLimit() - getFuelLevel())/fuelPerItem)))
-			
+			turtle.refuel(math.max(1,math.min(turtle.getItemCount(16),math.ceil((getFuelLimit() - getFuelLevel())/fuelPerItem))))
 		end
 		
 		if getFuelLevel() > last then
