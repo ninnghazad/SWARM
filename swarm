@@ -203,7 +203,7 @@ function activityIndicator()
 end
 
 function getInfoString()
-	return "SWARM "..systemType.." #"..id.." ["..label.."]"
+	return "SWARM "..systemType.." #"..id
 end
 function _gui()
 	local k,v,e,msg
@@ -211,7 +211,9 @@ function _gui()
 		sleep(guiUpdateInterval);
 		term.clear()
 		term.setCursorPos(1,1)
-		msg = getInfoString().." "..activityIndicator().."\n"
+		msg = getInfoString().." "..activityIndicator()
+		os.setComputerLabel(msg)
+		msg = msg.."\n"
 		msg = msg.."[uptime - sys.: "..formatTime(os.clock(),true)..", prog.: "..formatTime((timestamp()-startTime)/20,true).."]".."\n"
 		for k,v in pairs(statistics) do
 			msg = msg ..k..": "..v.."\n"

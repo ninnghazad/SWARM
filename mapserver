@@ -6,6 +6,7 @@ mapserver = {}
 version = "0.1"
 os.loadAPI("swarm")
 swarm.setSystemType("mapserver")
+numSaveFiles = 4
 
 function locate()
 	while true do
@@ -23,61 +24,6 @@ local function init()
 	locate()
 	load()
 	return true
-end
-
-function load()
-	local mapFile = mapFile1
-	local saveToggle = true
-	while true do
-		print("Trying backup "..mapFile.." ...")
-		file = fs.open(mapFile , "r")	
-		if file ~= nil then
-			print("Loading "..fs.getSize(mapFile).." bytes of map data...")
-			
-			--[[
---			local buffer = textutils.unserialize(file.readAll())
-			local buffer = ""
-			for i = 1,fs.getSize(mapFile),1 do
-				if i % 1024 == 0 then 
-					local x,y = term.getCursorPos()
-					print("Loaded: "..i.." / "..fs.getSize(mapFile))
-					term.setCursorPos(x,y)
-					sleep(0) 
-				end
-				buffer = buffer..file.read()
-			end
-			sleep(0)
-			buffer = textutils.unserialize(buffer)
-			--]]
-			
-			local buffer = file.readAll()
-			file.close()
-			sleep(0)--
-			buffer = textutils.unserialize(buffer)
-			if not buffer then 
-				print("Saved data corrupt, could not deserialize.")
-				worldMap = nil
-			else
-				print("Recreating map from saved data...")
-				worldMap = map.new(0,buffer)
-			end
-			
-			if worldMap ~= nil and type(worldMap) == "table" then print("Successfully loaded.") break end
-		else
-			print("There is no such map data: '"..mapFile.."'")
-		end
-		if saveToggle then
-			saveToggle = false
-			mapFile = mapFile2
-		else
-			print("Could not load any saved map!")
-			worldMap = map.new()
-			sleep(10)
-			break
-		end
-		print("failed 2")
-		sleep(4)
-	end
 end
 
 function net()
@@ -190,83 +136,193 @@ function key()
 	end
 end
 
-function save()
-	local timer = os.startTimer(saveInterval)
-	local e,data,file,start
-	local mapFile = mapFile1
-	local saveToggle = true
+function decode(str,signed)
+	local num = 0
+	local bytes = #str
+	signed = signed or true
+	
+	for i = 1,bytes do
+		num = num + string.byte(str,i) * 256^(bytes-i)
+	end
+	if signed then
+		num = num - ((2^(bytes*8))/2)
+	end
+	return num
+end
+function encode(num,signed,bytes)
+	local str=""
+	signed = signed or true
+	bytes = bytes or 4
+	
+	if signed then
+		num = num + ((2^(bytes*8))/2)
+	end
+	for i=1,bytes do
+		str = string.char(num%256) .. str
+		num = math.floor(num/256)
+	end
+	return str
+end
 
+local eofMarker = "\0\0\0\0\0\0\0\0\0\0\0"
+
+function binWrite(fileName,data)
+	local startTime = swarm.timestamp()
+	if fs.exists(fileName) then
+		fs.delete(fileName)
+	end
+	file = fs.open(fileName, "wb")
+	local buffer,count,bytes
+	count = {0,0}
+	for z,za in pairs(data) do
+		if type(za) == "table" and swarm.countArray(za) > 0 then
+			for y,ya in pairs(za) do
+				for x,v in pairs(ya) do
+					buffer = encode(x)..encode(y)..encode(z,false,1)..encode(v[1],true,1)..encode(v[2],true,1)
+					for i = 1, #buffer do
+						file.write(buffer:byte(i))
+						count[1] = count[1] + 1
+					end
+					count[2] = count[2] + 1
+				end
+			end
+		end
+	end
+	for i = 1, #eofMarker do
+		file.write(eofMarker:byte(i))
+		
+	end
+	file.close()
+	
+	swarm.statistics["last written values"] = count[2]
+	swarm.statistics["last written bytes"] = count[1]+#eofMarker
+	swarm.statistics["last written seconds"] = swarm.timestamp() - startTime
+	return true
+end
+function binRead(fileName,data)
+	file = fs.open(fileName, "rb")
+	if file == nil then
+		return false
+	end
+	local buffer,count,eof
+	local x,y,z,v,fail,c
+	v = {}
+	fail = false
+	count = 0
+	eof = false
+	while true do
+		buffer = ""
+		while true do
+			c = file.read()
+			if c == nil then
+				fail = true
+				break
+			end
+			buffer = buffer..string.char(c)
+			
+			if #buffer == #eofMarker and buffer == eofMarker then
+				eof = true
+				break
+			end
+			if #buffer == 11 then
+				break
+			end
+		end
+		
+		if fail then
+			print("FAIL: "..textutils.serialize(buffer))
+			fail = true
+			break
+		elseif eof then
+		--	print("found eof")
+			break
+		end
+		--print(buffer)
+		x = decode(buffer:sub(1,4))
+		y = decode(buffer:sub(5,8))
+		z = decode(buffer:sub(9,9),false)
+		v[1] = decode(buffer:sub(10,10))
+		v[2] = decode(buffer:sub(11,11))
+		--print(#buffer.." # "..x..","..y..","..z..": "..v[1]..","..v[2])
+		data:set(x,y,z,v)
+		count = count + 1
+	end
+	file.close()
+	if fail then
+		return false
+	else
+		return count
+	end
+end
+
+function load()
+	local mapFile,i,s,t
+	i = 1
+	t = 0
+	local biggest = 1
+	while true do
+		mapFile = mapFileBase..i
+		s = fs.getSize(mapFile)
+		if s > t then
+			biggest = i
+			t = s
+		end
+		i = i + 1
+		if i > numSaveFiles then
+			break
+		end
+	end
+	-- try to load biggest mapfile first, then just try all other ones
+	i = biggest
+	while true do
+		mapFile = mapFileBase..i
+		print("Trying backup "..mapFile.." ...")
+		
+		if fs.exists(mapFile) then
+			print("Loading "..fs.getSize(mapFile).." bytes of map data...")
+			
+			
+			if binRead(mapFile,worldMap) and worldMap ~= nil and type(worldMap) == "table" then 
+				print("Successfully loaded.") 
+				break 
+			end
+		else
+			print("There is no such map data: '"..mapFile.."'")
+		end
+	
+		i = i + 1
+		if i == biggest then
+			print("Could not load any saved map!")
+			worldMap = map.new()
+			sleep(2)
+			break
+		end
+	end
+-- 	--sleep(10)
+end
+
+function save()
+	local timer = os.startTimer(4)
+	local e,data,file,start,i
+	i = 1
+	local mapFile
+	local saveToggle = true
+	
 	while true do
 		e = {os.pullEvent("timer")}
 		if e[2] == timer then
 			start = swarm.timestamp()
-			if saveToggle then
-				saveToggle = false
-				mapFile = mapFile1
-			else
-				saveToggle = true
-				mapFile = mapFile2
-			end
+			mapFile = mapFileBase..i
 			
-				--[[errors[1] = "serializing world in background ..."
-				data = textutils.serializeMap(worldMap)
-				errors[1] = "serialized, now writing ..."
-				
-				if data == nil then
-					errors[#errors+1] = "Could not serialize data for saving."
-				else]]
-			file = fs.open(mapFile, "w")
+			binWrite(mapFile,worldMap.data)
 			
-			if file ~= nil then
-			--[[	local i = 0
-				file.write("{")
-				for x,xv in pairs(worldMap) do
-					file.write("["..x.."]={")
-					for y,yv in pairs(xv) do
-						file.write("["..y.."]={")
-						for z,v in pairs(yv) do
-							i= i+1
-							if i % 1000 == 0 then sleep(0) end
-							errors[1] = "saving world "..x..","..y..","..z.." #"..i
-							file.write("["..z.."]="..textutils.serialize(v)..",")
-							--sleep(0) -- ugly yield, no other events but timer, so it should be ok
-						end
-						file.write("},")
-					end
-					file.write("},")
-				end
-				file.write("} ")
-				]]
-				local buffer = textutils.serialize(worldMap)
-				file.write(buffer)
-				sleep(0)
-				
-				file.close()	
-				buffer = #buffer
-				--errors[1] = "saved world with "..i.." entries at "..swarm.timestamp().." in "..((swarm.timestamp()-start)/20).." seconds to "..mapFile1
-				errors[1] = "saved world with "..buffer.." bytes at "..swarm.timestamp().." in "..((swarm.timestamp()-start)/20).." seconds to "..mapFile
-			else
-				errors[#errors+1] = "Could not open file '"..mapFile.."' for writing."
-			end
-			
-			
-			
-				
-
-			
-			data = nil
-			e = nil
 			sleep(0)
-			
-			if saveToggle then
-				if fs.exists(mapFile1) then fs.delete(mapFile1) end
-			else
-				if fs.exists(mapFile2) then fs.delete(mapFile2) end
-			end
-			
-			--sleep(100)
+			swarm.statistics["last written files"] = mapFile
 			timer = os.startTimer(saveInterval)
-			
+			i = i + 1
+			if i > numSaveFiles then
+				i = 1
+			end
 		end
 		
 	end
@@ -278,6 +334,14 @@ end
 
 
 function run()
+	if decode(encode(-123456)) ~= -123456 then
+		swarm.error("BUG")
+		return
+	end
+	if decode(encode(123456)) ~= 123456 then
+		swarm.error("BUG")
+		return
+	end
 	swarm.gpsPos = {6,6,6}
 	local startTime = swarm.timestamp()
 	
@@ -285,12 +349,12 @@ function run()
 	term.setCursorPos(1,1)
 
 	worldMap = map.new(0)
-	mapFile1 = "worldMap.data.0."..os.getComputerID() 
-	mapFile2 =  "worldMap.data.1."..os.getComputerID() 
+	mapFileBase = "worldMap.data."..os.getComputerID().."."
+	
 	name = os.getComputerLabel()
 	id = os.getComputerID()
 	dronePositions = {}
-
+		
 	swarm.statistics["GET"] = 0
 	swarm.statistics["SET"] = 0
 	swarm.statistics["GET Area"] = 0
@@ -299,7 +363,7 @@ function run()
 	swarm.statistics["GPS"] = 0
 	swarm.statistics["Drone Broadcasts"] = 0
 	
-	saveInterval = 3600 -- once an hour
+	saveInterval = 300 -- every five minutes
 	statusInterval = 0.5
 	--local viewPos = {283,-300,84}
 	screenSize = {term.getSize()}
@@ -309,7 +373,7 @@ function run()
 
 	init()
 
-	sleep(4)
+	sleep(1)
 
 	term.clear()
 	term.setCursorPos(1,1)

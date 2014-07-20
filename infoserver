@@ -30,56 +30,7 @@ function main()
 	-- Event loop, run forever
 	while true do
 		e = {os.pullEvent()}
-	if e[1] == "http_success" or e[1] == "http_failure" then
-			request = nil
-		elseif e[1] == "timer" and e[2] == t then -- Timed send of data to webserver
-			continue
-			-- JSON-Encode the data to be send
-			str = "{"
-			for k,v in pairs(data) do
-				str = str.."\""..k.."\": [ "
-				if v[1] ~= nil then
-				v[1] = string.gsub(v[1],'"',"'")
-				end
-				if v ~= nil and v[1] ~= nil and v[2] ~= nil and v[2]["uptime"] ~= nil then
-					str = str.."\""..v[1].." up: "..v[2]["uptime"].."s\","
-				elseif v ~= nil and v[1] ~= nil then
-					str = str.."\""..v[1].." \","
-				end
-				if #v >= 3 then
-					
-					if v[3] ~= nil and type(v[3]) == "table" and #v[3] > 0 then
-						str = str.."{"
-						for i,vv in pairs(v[3]) do
-							--if type(vv) == "string" then
-								vv = string.gsub(vv,'"',"'")
-								str = str.."\""..i.."\":\""..(vv).."\","
-							--end
-						end
-						str = string.sub(str,1,#str-1).."},"
-					end
-					
-				end
-				if #v >= 2 then
-					str = str.."\""..v[2][4].."\","
-				end
-				str = string.sub(str,1,#str-1).."],"
-			end
-			str = string.sub(str,1,#str-1).."}"
-			
-			if request == nil then
-				-- Actually send the data
-				--http.post(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
-				request = http.request(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
-				
-				-- Request some more status updates from drones in the area
-				rednet.broadcast(string.char(100))
-				rednet.broadcast(string.char(120))
-			end
-			-- Restart timer
-			t = os.startTimer(4)
-			
-		elseif e[1] == "rednet_message" and e[3]:byte(1) == 101 then -- Receive current status 
+		if e[1] == "rednet_message" and e[3]:byte(1) == 101 then -- Receive current status 
 			if data[e[2]] == nil then
 				data[e[2]] = {}
 			end
@@ -144,14 +95,65 @@ function gui()
 			end
 			i = i + 1
 		end	
-		-- Update local display at 5 fps
-		sleep(0.2)
+		-- Update local display at 10 fps
+		sleep(0.1)
+	end
+end
+function send()
+	while true do
+		-- JSON-Encode the data to be send
+		str = "{"
+		for k,v in pairs(data) do
+			sleep(0)
+			str = str.."\""..k.."\": [ "
+			if v[1] ~= nil then
+			v[1] = string.gsub(v[1],'"',"'")
+			end
+			if v ~= nil and v[1] ~= nil and v[2] ~= nil and v[2]["uptime"] ~= nil then
+				str = str.."\""..v[1].." up: "..v[2]["uptime"].."s\","
+			elseif v ~= nil and v[1] ~= nil then
+				str = str.."\""..v[1].." \","
+			end
+			if #v >= 3 then
+				
+				if v[3] ~= nil and type(v[3]) == "table" and #v[3] > 0 then
+					str = str.."{"
+					for i,vv in pairs(v[3]) do
+						sleep(0)
+						--if type(vv) == "string" then
+							vv = string.gsub(vv,'"',"'")
+							str = str.."\""..i.."\":\""..(vv).."\","
+						--end
+					end
+					str = string.sub(str,1,#str-1).."},"
+				end
+				
+			end
+			if #v >= 2 then
+				str = str.."\""..v[2][4].."\","
+			end
+			str = string.sub(str,1,#str-1).."],"
+		end
+		str = string.sub(str,1,#str-1).."}"
+		
+		
+		-- Actually send the data
+		http.post(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
+		--request = http.request(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
+		
+		-- Request some more status updates from drones in the area
+		rednet.broadcast(string.char(100))
+		rednet.broadcast(string.char(120))
+	
+		-- Restart timer
+		sleep(1)
 	end
 end
 
 function run()
 	function wrapMain() return swarm.wrap(main,"main") end 
 	function wrapGui() return swarm.wrap(gui,"gui") end 
+	function wrapSend() return swarm.wrap(send,"sender") end 
 	function wrapKeyboard() return swarm.wrap(key,"keyboard handler") end 
-	parallel.waitForAny(wrapMain,wrapGui,wrapKeyboard)
+	parallel.waitForAny(wrapMain,wrapGui,wrapKeyboard,warpSend)
 end
