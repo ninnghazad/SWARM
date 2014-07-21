@@ -6,6 +6,7 @@ LUA programs for the Minecraft modification ComputerCraft - shared pathfinding f
 <font style="font-weight:bold;">pastebin run Eaj2GwNK</font>
 
 What... ... why... ?
+
 This started off as a mining-script for multiple drones, quite a while ago. Since then it has
 been rewritten numerous times and evolved into a bunch of programs. It still is basically a 
 very long mining script.
@@ -19,6 +20,7 @@ jobs one after another.
 You could, for example, send jobs to have a bunch of whole chunks somewhere far away from 
 your base mined. 
 
+
 This system consists of multiple parts:
   drone - for turtles, executes jobs, be that mining or other stuff turtles like to do.
   mapserver - this acts as the shared memory of the drones.
@@ -28,6 +30,9 @@ This system consists of multiple parts:
 Optional parts:
   infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.
   more tools - tools to restart/shutdown all systems, query information ...
+
+
+
   
 Noteable system features:
   - Good pathfinding based on A* with a bunch of optimizations, caching, and shared map. Works well with
@@ -38,13 +43,15 @@ Noteable system features:
   - Binary mapfile format for mapserver, so loading/saving map is faster and takes less space.
   - Drones are aware of each other, can be individually configured, or have their config overwritten by a job.
   - More, probably..
+
   
 Known problems:
   Too many drones will makes everything CC stop working, seems to depend on server-power though.
   Lots of bugs!
 
-Job examples:
+
 Jobs can be send by specifying a file or a string containing a valid job. 
+Examples:
   -- This prints Hello World! on the screen of the drone that receives the job.
   job "print('Hello World!')"
   
