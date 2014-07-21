@@ -3,7 +3,7 @@ SWARM
 
 LUA programs for the Minecraft modification ComputerCraft - shared pathfinding for swarm-influenced semi-autonomous turtles and accompanying tools.
 
-pastebin run Eaj2GwNK
+<bold>pastebin run Eaj2GwNK</bold>
 
 What... ... why... ?
 This started off as a mining-script for multiple drones, quite a while ago. Since then it has
