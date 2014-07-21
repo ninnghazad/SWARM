@@ -20,22 +20,24 @@ jobs one after another.
 You could, for example, send jobs to have a bunch of whole chunks somewhere far away from 
 your base mined. 
 <br/>
+-----
 
-This system consists of multiple parts:
+This system consists of multiple parts:<br/>
 <ul>
 <li>drone - for turtles, executes jobs, be that mining or other stuff turtles like to do.</li>
 <li>mapserver - this acts as the shared memory of the drones.</li>
 <li>jobserver - this distributes jobs to turtles. send jobs to it with the "job" command.</li>
 <li>tools - tools to send jobs, meant to be used on pocketcomputers</li>
 </ul>
-Optional parts:
+Optional parts:<br/>
 <ul>
 <li>infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.</li>
 <li>more tools - tools to restart/shutdown all systems, query information ...</li>
 </ul>
 <br/>
+-----
 
-Noteable system features:
+Noteable system features:<br/>
 <ul>
 <li>Good pathfinding based on A* with a bunch of optimizations, caching, and shared map. Works well with exploration as well known areas. (Considering turtles are basically blind.)</li>
 <li>Mining-functions included in API, like digArea or digChunk (100% quarry pattern, refueling, unloading...)</li>
@@ -45,7 +47,8 @@ Noteable system features:
 <li>More, probably..</li>
 </ul><br/>
 -----
-Known problems:
+
+Known problems:<br/>
 <ul>
 <li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
 <li>Lots of bugs!</li>
