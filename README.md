@@ -22,15 +22,17 @@ your base mined.
 <br/>
 
 This system consists of multiple parts:
+<ul>
   drone - for turtles, executes jobs, be that mining or other stuff turtles like to do.
   mapserver - this acts as the shared memory of the drones.
   jobserver - this distributes jobs to turtles. send jobs to it with the "job" command.
   tools - tools to send jobs, meant to be used on pocketcomputers
-
+</ul>
 Optional parts:
+<ul>
   infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.
   more tools - tools to restart/shutdown all systems, query information ...
-<br/>
+</ul>
 
 
   
@@ -45,12 +47,14 @@ Noteable system features:
 </ul><br/>
   
 Known problems:
+<ul>
   Too many drones will makes everything CC stop working, seems to depend on server-power though.
   Lots of bugs!
 
 
 Jobs can be send by specifying a file or a string containing a valid job. 
 Examples:
+```lua
   -- This prints Hello World! on the screen of the drone that receives the job.
   job "print('Hello World!')"
   
@@ -68,6 +72,6 @@ Examples:
   -- Just like above, but this time also drop blocks matching ignoreSlots that drone had to mine in order
   -- to dig its path. Will always keep 1 items in ignoreSlots.
   job "config["dropIgnoreSlots"] = true config["ignoreSlots"] = {1,2} digChunk(1,2,120,0)"
-  
+```
 
 You have to take care of chunkloading yourself. But, alas, take a look at this: <a href="http://www.computercraft.info/forums2/index.php?/topic/18156-mc-16-cc-158-163-turtle-chunkloaders-mining-chunkloaders-crmod/">CR's turtle peripherals</a>
