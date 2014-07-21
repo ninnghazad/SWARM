@@ -5,7 +5,7 @@ LUA programs for the Minecraft modification ComputerCraft - shared pathfinding f
 
     pastebin run Eaj2GwNK
 
-<h2>What... ... why... ?</h2>
+##What... ... why... ?
 
 This started off as a mining-script for multiple drones, quite a while ago. Since then it has
 been rewritten numerous times and evolved into a bunch of programs. It still is basically a 
@@ -22,14 +22,14 @@ your base mined.
 <br/>
 -----
 
-This system consists of multiple parts:<br/>
+###This system consists of multiple parts:
 <ul>
 <li>drone - for turtles, executes jobs, be that mining or other stuff turtles like to do.</li>
 <li>mapserver - this acts as the shared memory of the drones.</li>
 <li>jobserver - this distributes jobs to turtles. send jobs to it with the "job" command.</li>
 <li>tools - tools to send jobs, meant to be used on pocketcomputers</li>
 </ul>
-Optional parts:<br/>
+###Optional parts:
 <ul>
 <li>infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.</li>
 <li>more tools - tools to restart/shutdown all systems, query information ...</li>
@@ -37,8 +37,8 @@ Optional parts:<br/>
 <br/>
 -----
 
-Noteable system features:<br/>
-<ul>
+###Noteable system features:<br/>
+<ul >
 <li>Good pathfinding based on A* with a bunch of optimizations, caching, and shared map. Works well with exploration as well known areas. (Considering turtles are basically blind.)</li>
 <li>Mining-functions included in API, like digArea or digChunk (100% quarry pattern, refueling, unloading...)</li>
 <li>Drones can specify slots for blocks not be mined, enabling fast mining of all ore while leaving ~60% unwanted untouched and dropping the other.</li>
@@ -48,7 +48,7 @@ Noteable system features:<br/>
 </ul><br/>
 -----
 
-Known problems:<br/>
+###Known problems:<br/>
 <ul>
 <li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
 <li>Lots of bugs!</li>
