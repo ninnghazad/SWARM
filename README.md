@@ -30,8 +30,8 @@ This system consists of multiple parts:
 </ul>
 Optional parts:
 <ul>
-<li>infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.<li>
-<li>more tools - tools to restart/shutdown all systems, query information ...<li>
+<li>infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.</li>
+<li>more tools - tools to restart/shutdown all systems, query information ...</li>
 </ul>
 
 
@@ -73,5 +73,5 @@ Examples:
   -- to dig its path. Will always keep 1 items in ignoreSlots.
   job "config["dropIgnoreSlots"] = true config["ignoreSlots"] = {1,2} digChunk(1,2,120,0)"
 ```
-
+-----
 You have to take care of chunkloading yourself. But, alas, take a look at this: <a href="http://www.computercraft.info/forums2/index.php?/topic/18156-mc-16-cc-158-163-turtle-chunkloaders-mining-chunkloaders-crmod/">CR's turtle peripherals</a>
