@@ -102,6 +102,16 @@ Directions are interpreted like this:
 <li>5 Down</li>
 </ul>
 
+So a drone that should have its home at 1,2,3 and unloads items to a chest 
+below that spot and refuels from a chest above it would have the following 
+config entries (among others):
+```lua
+    -- it does not matter in this case, but it shall face north.
+    config["homePos"] = {1,2,3,0}
+    config["rechargePos"] = {1,2,3,4}
+    config["storagePos"] = {1,2,3,5}
+```
+
 ###Examples:
 Jobs can be send by specifying a file or a string containing a valid job.<br/>
 ```lua
