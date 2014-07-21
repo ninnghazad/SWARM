@@ -23,15 +23,15 @@ your base mined.
 
 This system consists of multiple parts:
 <ul>
-  drone - for turtles, executes jobs, be that mining or other stuff turtles like to do.
-  mapserver - this acts as the shared memory of the drones.
-  jobserver - this distributes jobs to turtles. send jobs to it with the "job" command.
-  tools - tools to send jobs, meant to be used on pocketcomputers
+<li>drone - for turtles, executes jobs, be that mining or other stuff turtles like to do.</li>
+<li>mapserver - this acts as the shared memory of the drones.</li>
+<li>jobserver - this distributes jobs to turtles. send jobs to it with the "job" command.</li>
+<li>tools - tools to send jobs, meant to be used on pocketcomputers</li>
 </ul>
 Optional parts:
 <ul>
-  infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.
-  more tools - tools to restart/shutdown all systems, query information ...
+<li>infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.<li>
+<li>more tools - tools to restart/shutdown all systems, query information ...<li>
 </ul>
 
 
