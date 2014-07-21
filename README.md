@@ -19,7 +19,7 @@ jobs one after another.
 
 You could, for example, send jobs to have a bunch of whole chunks somewhere far away from 
 your base mined. 
-<br/>
+
 ---
 
 ###This system consists of multiple parts:
@@ -35,7 +35,6 @@ your base mined.
 <li>infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.</li>
 <li>more tools - tools to restart/shutdown all systems, query information ...</li>
 </ul>
-<br/>
 
 ---
 
@@ -47,7 +46,7 @@ your base mined.
 <li>Binary mapfile format for mapserver, so loading/saving map is faster and takes less space.</li>
 <li>Drones are aware of each other, can be individually configured, or have their config overwritten by a job.</li>
 <li>More, probably..</li>
-</ul><br/>
+</ul>
 
 ---
 
@@ -57,7 +56,7 @@ your base mined.
 <li>Lots of bugs!</li>
 </ul>
 
------
+---
 
 ##How?
 Jobs can be send by specifying a file or a string containing a valid job.<br/>
@@ -82,6 +81,6 @@ Examples:
   job "config["dropIgnoreSlots"] = true config["ignoreSlots"] = {1,2} digChunk(1,2,120,0)"
 ```
 
------
+---
 
 You have to take care of chunkloading yourself. But, alas, take a look at this: <a href="http://www.computercraft.info/forums2/index.php?/topic/18156-mc-16-cc-158-163-turtle-chunkloaders-mining-chunkloaders-crmod/">CR's turtle peripherals</a>
