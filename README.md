@@ -91,6 +91,7 @@ Positions are written like this depending on target function:
 <li>{xMin,yMin,zMin,xMax,yMax,zMax}</li>
 <li>{xMin,yMin,zMin,xMax,yMax,zMax,direction}</li>
 </ul>
+(Yes, z is height.)
 
 Directions are interpreted like this:
 <ul>
