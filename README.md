@@ -44,9 +44,7 @@ Noteable system features:
 <li>Drones are aware of each other, can be individually configured, or have their config overwritten by a job.</li>
 <li>More, probably..</li>
 </ul><br/>
-
 -----
-
 Known problems:
 <ul>
 <li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
