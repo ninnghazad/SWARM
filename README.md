@@ -29,6 +29,7 @@ your base mined.
 <li>jobserver - this distributes jobs to turtles. send jobs to it with the "job" command.</li>
 <li>tools - tools to send jobs, meant to be used on pocketcomputers</li>
 </ul>
+
 ###Optional parts:
 <ul>
 <li>infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.</li>
@@ -37,7 +38,7 @@ your base mined.
 <br/>
 -----
 
-###Noteable system features:<br/>
+###Noteable system features:
 <ul >
 <li>Good pathfinding based on A* with a bunch of optimizations, caching, and shared map. Works well with exploration as well known areas. (Considering turtles are basically blind.)</li>
 <li>Mining-functions included in API, like digArea or digChunk (100% quarry pattern, refueling, unloading...)</li>
@@ -46,9 +47,10 @@ your base mined.
 <li>Drones are aware of each other, can be individually configured, or have their config overwritten by a job.</li>
 <li>More, probably..</li>
 </ul><br/>
+
 -----
 
-###Known problems:<br/>
+###Known problems:
 <ul>
 <li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
 <li>Lots of bugs!</li>
@@ -56,6 +58,7 @@ your base mined.
 
 -----
 
+##How?
 Jobs can be send by specifying a file or a string containing a valid job.<br/>
 Examples:
 ```lua
