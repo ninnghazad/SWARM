@@ -40,6 +40,7 @@ your base mined.
 
 ###Noteable system features:
 <ul >
+<li>Full job queue, jobs wait until a drone is free to process them.</li>
 <li>Good pathfinding based on A* with a bunch of optimizations, caching, and shared map. Works well with exploration as well known areas. (Considering turtles are basically blind.)</li>
 <li>Mining-functions included in API, like digArea or digChunk (100% quarry pattern, refueling, unloading...)</li>
 <li>Drones can specify slots for blocks not be mined, enabling fast mining of all ore while leaving ~60% unwanted untouched and dropping the other.</li>
@@ -54,6 +55,7 @@ your base mined.
 <ul>
 <li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
 <li>Still a bit tricky to set up, with the ids and stuff.</li>
+<li>Since the jobserver, restarting jobs at same spot after crash needs some work.</li>
 <li>Lots of bugs!</li>
 </ul>
 
