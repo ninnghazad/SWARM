@@ -140,8 +140,6 @@ function navmap:get2(x,y,z,cacheonly,callDepth)
 				
 				counters[3] = counters[3] + 1
 				return v
-			else
-				-- check another response
 			end
 			
 			
@@ -1868,8 +1866,9 @@ function run()
 	function wrapReceiver() return swarm.wrap(net,"network receiver") end 
 	function wrapBroadcaster() return swarm.wrap(cast,"network broadcaster") end 
 	function wrapMain() return swarm.wrap(main,"main") end 
-	parallel.waitForAny(wrapReceiver,wrapBroadcaster,wrapMain,swarm.wrapGui)
-
+	--parallel.waitForAny(wrapReceiver,wrapBroadcaster,wrapMain,swarm.wrapGui)
+	parallel.waitForAny(wrapReceiver,wrapBroadcaster,wrapMain)
+	
 	if quit == true then
 		print("successfully terminated")
 	else

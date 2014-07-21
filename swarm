@@ -150,7 +150,27 @@ function log(msg)
 		die("Could not open logfile '"..logFileName.."' for writing or appending.\nPlease check permissions on ComputerCraft directories.\n")
 	end
 end
-
+function sortAssocTableCompare(a,b)
+print("COMP "..textutils.serialize(a))
+	return tonumber(a[1]) < tonumber(b[1])
+end
+function sortAssocTable(t)
+	table.sort(t, sortAssocTableCompare)
+	return t
+end
+function pairsAssoc (t, f)
+	local a = {}
+	for n in pairs(t) do table.insert(a, n) end
+		table.sort(a, f)
+		local i = 0      -- iterator variable
+		local iter = function ()   -- iterator function
+		i = i + 1
+		if a[i] == nil then return nil
+			else return a[i], t[a[i]]
+		end
+	end
+	return iter
+end
 function _errorStart()
 	_error = true
 	quit = true
@@ -215,7 +235,7 @@ function _gui()
 		os.setComputerLabel(msg)
 		msg = msg.."\n"
 		msg = msg.."[uptime - sys.: "..formatTime(os.clock(),true)..", prog.: "..formatTime((timestamp()-startTime)/20,true).."]".."\n"
-		for k,v in pairs(statistics) do
+		for k,v in pairsAssoc(statistics) do
 			msg = msg ..k..": "..v.."\n"
 		end
 		print(msg)

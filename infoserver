@@ -11,61 +11,112 @@ swarm.setSystemType("infoserver")
 local url = "http://dunkelraum.net/share/alphaomega.php"
 
 
-	local width,height = term.getSize()
-	local scrollPosX = 1
-	local scrollPosY = 1
-	local data = {}
+local width,height = term.getSize()
+local scrollPosX = 1
+local scrollPosY = 1
+local data = {}
+callDepth = 1
+
 -- Code:
 function main()
 	swarm.openModem()
 	local t = os.startTimer(4)
-	local e,msg,r
+	local e,msg,r,c
 	local str = ""
 	local startTime = os.clock()
 	
-	-- Initial request of drone stati
-	rednet.broadcast(string.char(100))
-	rednet.broadcast(string.char(120))
 	local request = nil
+	local actions = {
+		[101] = function(e)
+			if data[e[2]] == nil then data[e[2]] = {} end
+			data[e[2]][1] = string.sub(e[3],2)
+			end,
+		[121] = function(e)
+			if data[e[2]] == nil then data[e[2]] = {} end
+			data[e[2]][3] = textutils.unserialize(string.sub(e[3],2)) -- Receive??? oehm...??? PING?
+			end,
+		[10] = function(e)
+			if data[e[2]] == nil then data[e[2]] = {} end
+			data[e[2]][2] = textutils.unserialize(string.sub(e[3],2))
+			end,
+		[100] = function(e)
+			rednet.send(e[4],string.char(101).."["..swarm.getSystemType().."] "..swarm.id.." ["..swarm.label.."]")
+			end,
+		[110] = function(e)
+			swarm.status(callDepth,"received reboot signal")
+			rednet.send(e[4],string.char(111))
+			swarm.status(callDepth,"will now reboot")
+			os.reboot()
+			end,
+		[120] = function(e)
+			rednet.send(e[4],string.char(121)..textutils.serialize(swarm._status))
+			end,
+		[130] = function(e)
+			os.reboot()
+			end,
+		[140] = function(e)
+			swarm.status(callDepth,"received shutdown signal")
+			rednet.send(e[4],string.char(141))
+			swarm.status(callDepth,"will now shutdown")
+			os.shutdown()
+			end,
+	}
 	-- Event loop, run forever
 	while true do
-		e = {os.pullEvent()}
-		if e[1] == "rednet_message" and e[3]:byte(1) == 101 then -- Receive current status 
-			if data[e[2]] == nil then
-				data[e[2]] = {}
-			end
-			data[e[2]][1] = string.sub(e[3],2)
-		elseif e[1] == "rednet_message" and e[3]:byte(1) == 121 then -- Receive detailled status
-			if data[e[2]] == nil then
-				data[e[2]] = {}
-			end
-			data[e[2]][3] = textutils.unserialize(string.sub(e[3],2)) -- Receive??? oehm...??? PING?
-		elseif e[1] == "rednet_message" and e[3]:byte(1) == 10 then
-			if data[e[2]] == nil then
-				data[e[2]] = {}
-			end
-			data[e[2]][2] = textutils.unserialize(string.sub(e[3],2))
+		e = {os.pullEvent("rednet_message")}
+		c = e[3]:byte(1)
+		if actions[c] ~= nil then
+			actions[c](e)
 		end
-		
 	end
 end
+
+
+function ask()
+	swarm.openModem()
+	while true do
+		rednet.broadcast(string.char(100))
+		rednet.broadcast(string.char(120))
+		--print("ask")
+		sleep(1)
+	end
+end
+	
 function key()
-	local e
+	local e,c
+	local actions = {
+		[16] = function(e)
+			print("Q pressed, quitting...")
+			return false
+			end,
+		[200] = function(e)
+			scrollPosY = math.min(math.max(1,swarm.countArray(data)-(height-2)),scrollPosY + 1)
+			return true
+			end,
+		[208] = function(e)
+			scrollPosY = math.max(1,scrollPosY - 1)
+			return true
+			end,
+		[205] = function(e)
+			scrollPosX = math.min(256,scrollPosX + 1)
+			return true
+			end,
+		[203] = function(e)
+			scrollPosX = math.max(1,scrollPosX - 1)
+			return true
+			end,
+	}
+	
+	-- Event loop, run forever
 	while true do
 		e = {os.pullEvent("key")}
-		if e[2] == 16 then
-			print("Q pressed, quitting...")
-			break
-		elseif e[2] == 200 then
-			scrollPosY = math.min(swarm.countArray(data)-(height-2),scrollPosY + 1)
-		elseif e[2] == 208 then
-			scrollPosY = math.max(1,scrollPosY - 1)
-		elseif e[2] == 205 then
-			scrollPosX = math.min(256,scrollPosX + 1)
-		elseif e[2] == 203 then
-			scrollPosX = math.max(1,scrollPosX - 1)
+		c = e[2]
+		if actions[c] ~= nil then
+			if not actions[c](e) then
+				break
+			end
+			
 		end
-	
 	end
 end
 function gui()
@@ -76,8 +127,9 @@ function gui()
 		print("Press arrows to scroll, q to quit. ["..scrollPosX.."x"..scrollPosY.."]")
 		local tmp,n,i
 		
-		i = 0
-		for k,v in pairs(data) do
+		
+		i = 1
+		for k,v in swarm.pairsAssoc(data) do
 			if i >= scrollPosY then
 				tmp = k..": "
 				n = width - #tmp
@@ -90,18 +142,19 @@ function gui()
 						end
 						
 					end
+				else io.write(v)
 				end
 				io.write("\n")
 			end
 			i = i + 1
 		end	
 		-- Update local display at 10 fps
-		sleep(0.1)
+		sleep(0.5)
 	end
 end
 function send()
 	while true do
-		-- JSON-Encode the data to be send
+		-- JSON-Encode the data to be send, this is a mess, make it simpler and with less exceptions
 		str = "{"
 		for k,v in pairs(data) do
 			sleep(0)
@@ -140,20 +193,19 @@ function send()
 		-- Actually send the data
 		http.post(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
 		--request = http.request(url.."?"..swarm.urlEncode(str),textutils.serialize(str))
-		
-		-- Request some more status updates from drones in the area
-		rednet.broadcast(string.char(100))
-		rednet.broadcast(string.char(120))
+	
 	
 		-- Restart timer
-		sleep(1)
+		sleep(4)
 	end
 end
 
 function run()
 	function wrapMain() return swarm.wrap(main,"main") end 
 	function wrapGui() return swarm.wrap(gui,"gui") end 
+	function wrapAsk() return swarm.wrap(ask,"ask") end 
 	function wrapSend() return swarm.wrap(send,"sender") end 
 	function wrapKeyboard() return swarm.wrap(key,"keyboard handler") end 
-	parallel.waitForAny(wrapMain,wrapGui,wrapKeyboard,warpSend)
+	--parallel.waitForAny(wrapMain,wrapGui,wrapKeyboard,warpSend,wrapAsk)
+	parallel.waitForAny(wrapMain,wrapAsk,wrapKeyboard,wrapSend,wrapGui)
 end

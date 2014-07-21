@@ -30,13 +30,9 @@ function net()
 	callDepth = 0
 	swarm.status(callDepth,"mapserver is now running")
 	local e,coord,msg,stink,id
-	stink = 1
-	while true do
-		e = {os.pullEvent("modem_message")}
-		id = e[4]
-		msg = e[5]["message"]
-
-		if msg:byte(1) == 10 then -- position broadcast from drone, remember those
+	-- using a table of functions is faster then a bunch of if/elseifs
+	local actions = {
+		[10] = function(msg,id)
 			coord = textutils.unserialize(string.sub(msg,2))
 			if coord ~= nil and type(coord) == "table" and #coord >= 3 then
 				dronePositions[id] = {coord,swarm.timestamp()}
@@ -46,8 +42,8 @@ function net()
 				errors[#errors+1] = "received corrupt position broadcast from "..id.." "..textutils.serialize(coord)
 			end
 			swarm.statistics["Drone Broadcasts"] = swarm.statistics["Drone Broadcasts"] + 1
-		elseif msg:byte(1) == 1 then -- worldMap get request
-			--local start = os.clock()
+		end,
+		[1] = function(msg,id)
 			coord = textutils.unserialize(string.sub(msg,2))
 			if coord ~= nil and type(coord) == "table" then
 				msg = string.char(2).." "..textutils.serialize(worldMap:get(coord[1],coord[2],coord[3]))
@@ -57,52 +53,70 @@ function net()
 				errors[#errors+1] = "received corrupt get request from "..id
 			end
 			swarm.statistics["GET"] = swarm.statistics["GET"] + 1
-			--swarm.log("get request took "..(os.clock()-start)) -- takes 0
-		elseif msg:byte(1) == 3 then -- worldMap set request
+		end,
+		[3] = function(msg,id)
 			swarm.statistics["SET"] = swarm.statistics["SET"] + 1
 			coord = textutils.unserialize(string.sub(msg,2))
 			if coord ~= nil then
 				if coord[4] == nil then
 					worldMap:set(coord[1],coord[2],coord[3],nil)
 				else
-					--[[stink = worldMap:get(coord[1],coord[2],coord[3])
-					if stink == nil then
-						stink = 1
-					else 
-						stink = stink[2] + 1
-					end]]
-					
 					worldMap:set(coord[1],coord[2],coord[3],{coord[4],stink})
 				end
 			else
 				errors[#errors+1] = "received corrupt set request from "..e[2]
 			end
-		elseif msg:byte(1) == 100 then -- Status query 
+		end,
+		[100] = function(msg,id)
 			rednet.send(id,string.char(101).."MAPSERVER "..id.." ")
-		elseif msg:byte(1) == 110 then -- Reboot signal
+		end,
+		[110] = function(msg,id)
+			-- TODO: we should explicitly save on reboot?!
 			swarm.status(callDepth,"received reboot signal")
-		--	save()
 			rednet.send(id,string.char(111))
-			
 			swarm.status(callDepth,"will now reboot")
 			os.reboot()
-			break
-		elseif msg:byte(1) == 130 then -- Hard reboot signal
+		end,
+		[130] = function(msg,id)
 			os.reboot()
-			break
-		elseif msg:byte(1) == 140 then -- Shutdown signal
+		end,
+		[140] = function(msg,id)
 			swarm.status(callDepth,"received shutdown signal")
-		--	save()
 			rednet.send(id,string.char(141))
 			swarm.status(callDepth,"will now shutdown")
 			os.shutdown()
-			break
-		elseif msg:byte(1) == 120 then -- Full status query
+		end,
+		[120] = function(msg,id)
 			rednet.send(id,string.char(121)..textutils.serialize(swarm._status))
-		elseif msg == "PING" or msg == "ping" or msg:byte(1) == 123 then -- Serve PING/GPS request
-			swarm.statistics["GPS"] = swarm.statistics["GPS"] + 1
-			rednet.send(id,textutils.serialize({x,y,z}))
-		--	errors[#errors+1] = "gps to "..id
+		end,
+		[123] = function(msg,id)
+			if msg == "PING" or msg == "ping" or msg:byte(1) == 123 then -- Serve PING/GPS request
+				swarm.statistics["GPS"] = swarm.statistics["GPS"] + 1
+				rednet.send(id,textutils.serialize({x,y,z}))
+			end
+		end,
+		[80] = function(msg,id) -- 80 == P
+			if msg == "PING" or msg == "ping" or msg:byte(1) == 123 then -- Serve PING/GPS request
+				swarm.statistics["GPS"] = swarm.statistics["GPS"] + 1
+				rednet.send(id,textutils.serialize({x,y,z}))
+			end
+		end,
+		[112] = function(msg,id) -- 112 == p
+			if msg == "PING" or msg == "ping" or msg:byte(1) == 123 then -- Serve PING/GPS request
+				swarm.statistics["GPS"] = swarm.statistics["GPS"] + 1
+				rednet.send(id,textutils.serialize({x,y,z}))
+			end
+		end,
+	}
+	
+	stink = 1
+	while true do
+		e = {os.pullEvent("modem_message")}
+		id = e[4]
+		msg = e[5]["message"]
+		c = msg:byte(1)
+		if actions[c] ~= nil then
+			actions[c](msg,id)
 		end
 	end
 	errors[#errors+1] = "listener exits!"
@@ -334,14 +348,6 @@ end
 
 
 function run()
-	if decode(encode(-123456)) ~= -123456 then
-		swarm.error("BUG")
-		return
-	end
-	if decode(encode(123456)) ~= 123456 then
-		swarm.error("BUG")
-		return
-	end
 	swarm.gpsPos = {6,6,6}
 	local startTime = swarm.timestamp()
 	
