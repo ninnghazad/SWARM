@@ -72,12 +72,35 @@ You will need ingame:
 <ul>
 <li>A Working GPS.</li>
 <li>At least one turtle.</li>
-<li>At least 3 computers.</li>
+<li>At least 3 computers or 2 computers and 1 pocketcomputer.</li>
+<li>Wireless modems for all systems.</li>
+<li>Some fuel to get the drones started.</li>
 </ul>
 
 To use the installer (recommended) type
     pastebin run Eaj2GwNK
 on every system, and follow instuctions on screen.
+
+You will need to change configs by hand, default configs should be generated
+after install.
+
+Positions are written like this depending on target function:
+<ul>
+<li>{x,y,z}</li>
+<li>{x,y,z,direction}</li>
+<li>{xMin,yMin,zMin,xMax,yMax,zMax}</li>
+<li>{xMin,yMin,zMin,xMax,yMax,zMax,direction}</li>
+</ul>
+
+Directions are interpreted like this:
+<ul>
+<li>0 North</li>
+<li>1 East</li>
+<li>2 South</li>
+<li>3 West</li>
+<li>4 Up</li>
+<li>5 Down</li>
+</ul>
 
 ###Examples:
 Jobs can be send by specifying a file or a string containing a valid job.<br/>
