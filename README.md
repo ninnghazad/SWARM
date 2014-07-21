@@ -48,9 +48,9 @@ Noteable system features:
   
 Known problems:
 <ul>
-  Too many drones will makes everything CC stop working, seems to depend on server-power though.
-  Lots of bugs!
-
+<li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
+<li>Lots of bugs!</li>
+</ul>
 
 Jobs can be send by specifying a file or a string containing a valid job. 
 Examples:
@@ -73,5 +73,7 @@ Examples:
   -- to dig its path. Will always keep 1 items in ignoreSlots.
   job "config["dropIgnoreSlots"] = true config["ignoreSlots"] = {1,2} digChunk(1,2,120,0)"
 ```
+
 -----
+
 You have to take care of chunkloading yourself. But, alas, take a look at this: <a href="http://www.computercraft.info/forums2/index.php?/topic/18156-mc-16-cc-158-163-turtle-chunkloaders-mining-chunkloaders-crmod/">CR's turtle peripherals</a>
