@@ -20,7 +20,7 @@ jobs one after another.
 You could, for example, send jobs to have a bunch of whole chunks somewhere far away from 
 your base mined. 
 <br/>
------
+---
 
 ###This system consists of multiple parts:
 <ul>
@@ -36,7 +36,8 @@ your base mined.
 <li>more tools - tools to restart/shutdown all systems, query information ...</li>
 </ul>
 <br/>
------
+
+---
 
 ###Noteable system features:
 <ul >
@@ -48,7 +49,7 @@ your base mined.
 <li>More, probably..</li>
 </ul><br/>
 
------
+---
 
 ###Known problems:
 <ul>
