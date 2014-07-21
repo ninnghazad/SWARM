@@ -33,9 +33,8 @@ Optional parts:
 <li>infoserver - receives drone communication and shows current stati, also sends data as JSON to URL.</li>
 <li>more tools - tools to restart/shutdown all systems, query information ...</li>
 </ul>
+<br/>
 
-
-  
 Noteable system features:
 <ul>
 <li>Good pathfinding based on A* with a bunch of optimizations, caching, and shared map. Works well with exploration as well known areas. (Considering turtles are basically blind.)</li>
@@ -45,14 +44,18 @@ Noteable system features:
 <li>Drones are aware of each other, can be individually configured, or have their config overwritten by a job.</li>
 <li>More, probably..</li>
 </ul><br/>
-  
+
+-----
+
 Known problems:
 <ul>
 <li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
 <li>Lots of bugs!</li>
 </ul>
 
-Jobs can be send by specifying a file or a string containing a valid job. 
+-----
+
+Jobs can be send by specifying a file or a string containing a valid job.<br/>
 Examples:
 ```lua
   -- This prints Hello World! on the screen of the drone that receives the job.
