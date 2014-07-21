@@ -34,16 +34,15 @@ Optional parts:
 
 
   
-Noteable system features:<br/>
-  Good pathfinding based on A* with a bunch of optimizations, caching, and shared map. Works well with<br/>
-    exploration as well known areas. (Considering turtles are basically blind.)<br/>
-  Mining-functions included in API, like digArea or digChunk (100% quarry pattern, refueling, unloading...)<br/>
-  Drones can specify slots for blocks not be mined, enabling fast mining of all ore <br/>
-    while leaving ~60% unwanted untouched and dropping the other.<br/>
-  Binary mapfile format for mapserver, so loading/saving map is faster and takes less space.<br/>
-  Drones are aware of each other, can be individually configured, or have their config overwritten by a job.<br/>
-  More, probably..<br/>
-<br/>
+Noteable system features:
+<ul>
+<li>Good pathfinding based on A* with a bunch of optimizations, caching, and shared map. Works well with exploration as well known areas. (Considering turtles are basically blind.)</li>
+<li>Mining-functions included in API, like digArea or digChunk (100% quarry pattern, refueling, unloading...)</li>
+<li>Drones can specify slots for blocks not be mined, enabling fast mining of all ore while leaving ~60% unwanted untouched and dropping the other.</li>
+<li>Binary mapfile format for mapserver, so loading/saving map is faster and takes less space.</li>
+<li>Drones are aware of each other, can be individually configured, or have their config overwritten by a job.</li>
+<li>More, probably..</li>
+</ul><br/>
   
 Known problems:
   Too many drones will makes everything CC stop working, seems to depend on server-power though.
