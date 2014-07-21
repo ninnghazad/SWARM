@@ -17,8 +17,17 @@ It enables you to control a "swarm" of turtles from a remote place by defining j
 sending them to a server. Drones (turtles) ask the jobserver for work, and will process
 jobs one after another. 
 
-You could, for example, send jobs to have a bunch of whole chunks somewhere far away from 
-your base mined. 
+Through the mapserver the explored areas are known to all drones, which speeds up exploration
+significantly when multiple drones navigate the same area.
+The whole map is automatically backed up to disk so it is not lost on restart. 
+
+You don't have to manually place the turtles somewhere or program in any paths, they will 
+navigate on their own and find paths between coordinates. 
+
+You could, for example, have the drones mine large areas of whole chunks far away from your base. 
+Drones that are free would explore the area to find a path to the mining-zone and dig away, 
+bringing back the loot to your base. 
+
 
 ---
 
