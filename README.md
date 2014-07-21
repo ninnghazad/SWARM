@@ -22,7 +22,7 @@ your base mined.
 
 ---
 
-###This system consists of multiple parts:
+###Required parts:
 <ul>
 <li>drone - for turtles, executes jobs, be that mining or other stuff turtles like to do.</li>
 <li>mapserver - this acts as the shared memory of the drones.</li>
@@ -53,16 +53,38 @@ your base mined.
 ###Known problems:
 <ul>
 <li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
+<li>Still a bit tricky to set up, with the ids and stuff.</li>
 <li>Lots of bugs!</li>
 </ul>
 
 ---
 
 ##How?
+###Setup:
+You will need:
+<ul>
+<li>ComputerCraft</li>
+<li>http api enable in CC configs (only needed for installer and infoserver)</li>
+<li>increase the range of wireless modems (not needed, but no fun without)</li>
+</ul>
+
+You will need ingame:
+<ul>
+<li>A Working GPS.</li>
+<li>At least one turtle.</li>
+<li>At least 3 computers.</li>
+</ul>
+
+To use the installer (recommended) type
+    pastebin run Eaj2GwNK
+on every system, and follow instuctions on screen.
+
+###Examples:
 Jobs can be send by specifying a file or a string containing a valid job.<br/>
-Examples:
 ```lua
-  -- This prints Hello World! on the screen of the drone that receives the job.
+  -- Type those on a computer with wireless modem after setup:
+  
+    -- This prints Hello World! on the screen of the drone that receives the job.
   job "print('Hello World!')"
   
   -- This will make a drone move to the location 1,2,3 facing north, it will keep trying indefinitely.
