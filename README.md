@@ -62,7 +62,7 @@ bringing back the loot to your base.
 
 ###Known problems:
 <ul>
-<li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
+<li>Too many drones will make everything CC stop working, seems to depend on server-power though.</li>
 <li>Still a bit tricky to set up, with the ids and stuff.</li>
 <li>Since the jobserver, restarting jobs at same spot after crash needs some work.</li>
 <li>Lots of bugs!</li>
@@ -75,7 +75,7 @@ bringing back the loot to your base.
 You will need:
 <ul>
 <li>ComputerCraft</li>
-<li>http api enable in CC configs (only needed for installer and infoserver)</li>
+<li>http API enabled in CC configs (only needed for installer and infoserver)</li>
 <li>increase the range of wireless modems (not needed, but no fun without)</li>
 </ul>
 
@@ -123,6 +123,7 @@ config entries (among others):
     config["rechargePos"] = {1,2,3,4}
     config["storagePos"] = {1,2,3,5}
 ```
+---
 
 ###Examples:
 Jobs can be send by specifying a file or a string containing a valid job.<br/>
@@ -150,4 +151,20 @@ Jobs can be send by specifying a file or a string containing a valid job.<br/>
 
 ---
 
-You have to take care of chunkloading yourself. But, alas, take a look at this: <a href="http://www.computercraft.info/forums2/index.php?/topic/18156-mc-16-cc-158-163-turtle-chunkloaders-mining-chunkloaders-crmod/">CR's turtle peripherals</a>
+
+###Notes:
+<ul>
+<li>Turtles are basically blind, they only sense what they can bump into. That means that for a turtle to navigate a large space, especially if it is a dead end, it has to visit every spot that may be part of a path. And by visit i mean actually move to that spot, it cannot see the obvious exit until it is standing right in it. This has nothing to do with this software, it is just a limitation of blind turtles.</li>
+<li>Turtles cannot distinguish between friendly/enemy mobs or players, but as they are rather impatient, they will try to go around, wait until it has moved or just kill whatever they encounter depending on situation.</li>
+<li>You have to take care of chunkloading yourself. Make sure areas where turtles work and move are chunkloaded, with a some room to spare on the sides. Drones do not consider chunkloading at all, so make sure that if a turtle has to take a detour to a target, it won't run into unloaded chunks. But, alas, take a look at this: <a href="http://www.computercraft.info/forums2/index.php?/topic/18156-mc-16-cc-158-163-turtle-chunkloaders-mining-chunkloaders-crmod/">CR's turtle peripherals</a></li>
+<li>There are situations where navigation and exploration may be more specifically optimized, but you cannot optimize pathfinding for mazes and open space at once - so i have tried to strike a balanced compromise that works in (almost) any situation at decent speed. Pathfinding will try to balance path-lengths, turns-in-a-path, caching and calculation time, trying to determine paths that are not necessarily shortest, but actually fastest from calculation to arrival. A lot of time has been spend on trying out different realistic usage-scenarios and timing different methods within them to come up with this, a little weird, system. Turtles may seem to just randomly run around when exploring an area, but the spots they choose to explore have been chosen with method, to have high efficiency in a large range of situations.</li>
+<li>So if your drones are taking hours making their way through the landscape, that may well be normal, depending on the kind of route they have to explore. Complex unknown paths may take hours, easy known paths may take seconds. However, the drones will arrive if there is way, even if it takes days to do so.</li>
+<li>Do not give drones coordinates to a target they cannot reach. If you tell a drone to move into a mountain, but don't tell it to do so digging, it will by default try for find a way into that mountain for all eternity, rechecking it over and over.</li>
+</ul>
+
+
+---
+
+##Yeah, ok, but really... why?
+To learn lua, to try out some stuff around pathfinding, and to have a playground to experiment with robot-like systems. This was my first foray into lua, to see what that language actually is like from a users point of view. 
+What a fool i was to ignore it's blissfull simplicity for so long.
