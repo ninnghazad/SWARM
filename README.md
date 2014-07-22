@@ -70,8 +70,8 @@ bringing back the loot to your base.
 <li>Turtles cannot distinguish between friendly/enemy mobs or players, but as they are rather impatient, they will try to go around, wait until it has moved or just kill whatever they encounter depending on situation.</li>
 <li>Make sure areas where turtles work and move are chunkloaded, with a some room to spare on the sides. Drones do not consider chunkloading at all, so make sure that if a turtle has to take a detour to a target, it won't run into unloaded chunks.</li>
 <li>There are situations where navigation and exploration may be more specifically optimized, but you cannot optimize pathfinding for mazes and open space at once - so i have tried to strike a balanced compromise that works in (almost) any situation at decent speed. Pathfinding will try to balance path-lengths, turns-in-a-path, caching and calculation time, trying to determine paths that are not necessarily shortest, but actually fastest from calculation to arrival. A lot of time has been spend on trying out different realistic usage-scenarios and timing different methods within them to come up with this, a little weird, system. Turtles may seem to just randomly run around when exploring an area, but the spots they choose to explore have been chosen with method, to have high efficiency in a large range of situations.</li>
-<li>So if your drones are taking hours making their way through the landscape, that may well be normal, depending on the kind of route they have to explore. Complex unknown paths may take hours, easy known paths may take seconds.</li>
-
+<li>So if your drones are taking hours making their way through the landscape, that may well be normal, depending on the kind of route they have to explore. Complex unknown paths may take hours, easy known paths may take seconds. However, the drones will arrive if there is way, even if it takes days to do so.</li>
+<li>Do not give drones coordinates as a target they cannot reach. If you tell a drone to move into a mountain, but don't tell it to do so digging, it will by default try for find a way into that mountain for all eternity, rechecking it over and over.</li>
 </ul>
 
 ---
