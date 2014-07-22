@@ -71,15 +71,16 @@ end
 		local terr=terr or {}
 		local passed={}
 		local err,ok=terr
-		local j=2+(level or 0)
+		local j=(level or 0)
+		--print(textutils.serialize({err,ok}))
 		repeat
 			j=j+1
 			passed[err]=true
 			ok,err=pcall(error,'',j)
+			--print(textutils.serialize({err,ok}))
 			if err:match('^[^:]+')=='bios' then break end
 			table.insert(terr,err)
-		until (passed[err])
-	
+		until (false)--(passed[err])
 		return terr
 	end
 
@@ -187,6 +188,13 @@ end
 		r = r[#r]
 		return r
 	end
+	
+	function depth()
+		--print(textutils.serialize(ttraceback(0,{})))
+		local r = ttraceback(0,{})
+		return #r
+	end
+
 	function traceback(msg,level)
 		local level=level or 0
 		msg= msg or 'traceback' 

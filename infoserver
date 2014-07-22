@@ -15,7 +15,7 @@ local width,height = term.getSize()
 local scrollPosX = 1
 local scrollPosY = 1
 local data = {}
-callDepth = 1
+
 
 -- Code:
 function main()
@@ -43,9 +43,9 @@ function main()
 			rednet.send(e[4],string.char(101).."["..swarm.getSystemType().."] "..swarm.id.." ["..swarm.label.."]")
 			end,
 		[110] = function(e)
-			swarm.status(callDepth,"received reboot signal")
+			swarm.status("received reboot signal")
 			rednet.send(e[4],string.char(111))
-			swarm.status(callDepth,"will now reboot")
+			swarm.status("will now reboot")
 			os.reboot()
 			end,
 		[120] = function(e)
@@ -55,9 +55,9 @@ function main()
 			os.reboot()
 			end,
 		[140] = function(e)
-			swarm.status(callDepth,"received shutdown signal")
+			swarm.status("received shutdown signal")
 			rednet.send(e[4],string.char(141))
-			swarm.status(callDepth,"will now shutdown")
+			swarm.status("will now shutdown")
 			os.shutdown()
 			end,
 	}

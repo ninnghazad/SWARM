@@ -27,8 +27,7 @@ local function init()
 end
 
 function net()
-	callDepth = 0
-	swarm.status(callDepth,"mapserver is now running")
+	swarm.status("mapserver is now running")
 	local e,coord,msg,stink,id
 	-- using a table of functions is faster then a bunch of if/elseifs
 	local actions = {
@@ -37,7 +36,7 @@ function net()
 			if coord ~= nil and type(coord) == "table" and #coord >= 3 then
 				dronePositions[id] = {coord,swarm.timestamp()}
 				
-				worldMap:set(coord[1],coord[2],coord[3],{0,1})
+				worldMap:set(coord[1],coord[2],coord[3],{0,swarm.timestamp()})
 			else
 				errors[#errors+1] = "received corrupt position broadcast from "..id.." "..textutils.serialize(coord)
 			end
@@ -61,7 +60,7 @@ function net()
 				if coord[4] == nil then
 					worldMap:set(coord[1],coord[2],coord[3],nil)
 				else
-					worldMap:set(coord[1],coord[2],coord[3],{coord[4],stink})
+					worldMap:set(coord[1],coord[2],coord[3],{coord[4],swarm.timestamp()})
 				end
 			else
 				errors[#errors+1] = "received corrupt set request from "..e[2]
@@ -72,18 +71,18 @@ function net()
 		end,
 		[110] = function(msg,id)
 			-- TODO: we should explicitly save on reboot?!
-			swarm.status(callDepth,"received reboot signal")
+			swarm.status("received reboot signal")
 			rednet.send(id,string.char(111))
-			swarm.status(callDepth,"will now reboot")
+			swarm.status("will now reboot")
 			os.reboot()
 		end,
 		[130] = function(msg,id)
 			os.reboot()
 		end,
 		[140] = function(msg,id)
-			swarm.status(callDepth,"received shutdown signal")
+			swarm.status("received shutdown signal")
 			rednet.send(id,string.char(141))
-			swarm.status(callDepth,"will now shutdown")
+			swarm.status("will now shutdown")
 			os.shutdown()
 		end,
 		[120] = function(msg,id)

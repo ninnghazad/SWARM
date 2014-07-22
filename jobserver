@@ -14,24 +14,23 @@ jobs = {}
 sent = {}
 --local active = {}
 active = {}
-callDepth = 0
+
 counter = {}
 
-function save(callDepth)
-	callDepth = callDepth + 1
+function save()
 	config["active"] = active
 	config["jobs"] = jobs
 	config["sent"] = sent
 	config["lastJobID"] = lastId
-	swarm.saveConfig(callDepth,config)
+	swarm.saveConfig(config)
 end
-function load(callDepth)
+function load()
 	local i,v
-	callDepth = callDepth + 1
 	config = swarm.loadConfig()
 	if config == nil then 
 		return nil
 	end
+	print(textutils.serialize(config))
 	active = config["active"] or {}
 	jobs = config["jobs"] or {} 
 	sent = config["sent"] or {}
@@ -55,10 +54,9 @@ function load(callDepth)
 	return config
 end
 function main()
-	local callDepth = 1
-	swarm.status(-1000,"main() started",true)
+	swarm.status("main() started",true,-1000)
 	while not swarm.quit do
-		swarm.status(callDepth,"main routine: jobs: "..swarm.countArray(jobs).." active: "..swarm.countArray(active).." sent: "..swarm.countArray(sent).." finished: "..config["finished"])
+		swarm.status("main routine: jobs: "..swarm.countArray(jobs).." active: "..swarm.countArray(active).." sent: "..swarm.countArray(sent).." finished: "..config["finished"])
 		e = {os.pullEvent("modem_message")}
 	--	if e[3] == 17 then
 	--		print("j: "..#jobs.." s: "..#sent.." a: "..#active)
@@ -82,7 +80,7 @@ function main()
 				rednet.send(e[4],string.char(21)..textutils.serialize({jobid,job}))
 				sent[jobid] = job
 				table.remove(jobs,1)
-				save(callDepth)
+				save()
 				
 				swarm.statistics["Suggested Jobs"] = swarm.statistics["Suggested Jobs"] + 1
 				
@@ -95,14 +93,14 @@ function main()
 				-- drone has denied job
 				jobs[#jobs+1] = sent[jobid]
 				table.remove(sent,jobid)
-				save(callDepth)
+				save()
 				swarm.statistics["Declined Jobs"] = swarm.statistics["Declined Jobs"] + 1
 				
 			else 
 	--			-- drone has accepted job, yay
 				active[jobid] = sent[jobid]
 				table.remove(sent,jobid)
-				save(callDepth)
+				save()
 				swarm.statistics["Accepted Jobs"] = swarm.statistics["Accepted Jobs"] + 1
 				
 			end
@@ -115,12 +113,12 @@ function main()
 			if status == -1 then
 				table.insert(jobs,active[jobid])
 				table.remove(active,jobid)
-				save(callDepth)
+				save()
 				swarm.statistics["Failed Jobs"] = swarm.statistics["Failed Jobs"] + 1
 				
 			elseif status == -2 then
 				table.remove(active,jobid)
-				save(callDepth)
+				save()
 				swarm.statistics["Finished Jobs"] = swarm.statistics["Finished Jobs"] + 1
 			else
 				-- status update
@@ -136,7 +134,7 @@ function main()
 					swarm.statistics["Bad Jobs"] = swarm.statistics["Bad Jobs"] + 1
 				else
 					table.insert(jobs,{0,msg[1]})
-					save(callDepth)
+					save()
 					rednet.send(e[4],string.char(26)..textutils.serialize({true}))
 				
 					swarm.statistics["Created Jobs"] = swarm.statistics["Created Jobs"] + 1
@@ -147,10 +145,10 @@ function main()
 		elseif e[5]["message"]:byte(1) == 100 then -- Status query 
 			rednet.send(e[4],string.char(101).."JOBSERVER "..swarm.id.." ["..swarm.label.."] jobs: "..swarm.countArray(jobs).." active: "..swarm.countArray(active).." sent: "..swarm.countArray(sent).." finished: "..config["finished"])
 		elseif e[5]["message"]:byte(1) == 110 then -- Reboot signal
-			swarm.status(callDepth,"received reboot signal")
-			save(callDepth)
+			swarm.status("received reboot signal")
+			save()
 			rednet.send(e[4],string.char(111))
-			swarm.status(callDepth,"will now reboot")
+			swarm.status("will now reboot")
 			os.reboot()
 			break
 		elseif e[5]["message"]:byte(1) == 130 then -- Hard reboot signal
@@ -162,7 +160,6 @@ function main()
 		
 	end
 end
-
 
 --[[
     The one and only: run()
@@ -186,12 +183,12 @@ function run()
 	swarm.openModem()
 	
 	-- Load config or create a default one.
-	load(callDepth)
+	load()
 	if not config then
 		print("No config found, trying to create one.")
 		config = config or {}
 		config["finished"] = 0
-		save(callDepth)
+		save()
 		print("Default config created, please change it and reboot.")
 		return
 	end

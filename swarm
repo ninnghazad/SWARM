@@ -21,7 +21,7 @@ swarm = {}
 
 os.loadAPI("debug")
 debug.override()
-
+swarm.debug = debug
 
 os.loadAPI("map")
 os.loadAPI("heap")
@@ -282,23 +282,27 @@ end
 
 __status = ""
 _status = {}
-unknownCallDepth = -10
-
-function status(callDepth,msg,doPrint)
-	if msg == nil then
-		err("BUG: nil msg to status()!")
+function test()
+	_test()
+end
+function _test(i)
+	i = i or 0
+	print(i..": "..debug.depth())
+	if i < 10 then
+		_test(i+1)
 	end
+end
+
+function status(msg,doPrint,callDepth)
 	doPrint = doPrint or false
 	if doPrint then
 		print(msg)
 	end
 	
+	callDepth = callDepth or (debug.depth() - 1)
 	if callDepth == nil or type(callDepth) ~= "number" then
-		err("BUG: nil callDepth to status()!")
+		err("BUG: nil callDepth to status() ! '"..textutils.serialize(callDepth).."'")
 	end
-	
-	
-	callDepth = callDepth or unknownCallDepth
 	
 	if callDepth >= 0 and type(_status) == "table" then
 		local change = true
@@ -512,11 +516,11 @@ function loadConfig()
 end
 
 -- Write the configuration to disk
-function saveConfig(callDepth,configOverride)
+function saveConfig(configOverride)
 	if configOverride ~= nil then config = configOverride end
-	callDepth = callDepth or -20
-	status(callDepth,"saving config ... ")
-	--debug(callDepth)
+	
+	status("saving config ... ")
+	
 	local file = fs.open(configFileName , "w")
 	if file ~= nil then
 		file.write(textutils.serialize(config))
