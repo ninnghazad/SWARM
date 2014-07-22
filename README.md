@@ -60,12 +60,18 @@ bringing back the loot to your base.
 
 ---
 
-###Known problems:
+###Known problems and important notes:
 <ul>
 <li>Too many drones will makes everything CC stop working, seems to depend on server-power though.</li>
 <li>Still a bit tricky to set up, with the ids and stuff.</li>
 <li>Since the jobserver, restarting jobs at same spot after crash needs some work.</li>
 <li>Lots of bugs!</li>
+<li>Turtles are basically blind, they only sense what they can bump into. That means that for a turtle to navigate a large space, especially if it is a dead end, it has to visit every spot that may be part of a path. And by visit i mean actually move to that spot, it cannot see the obvious exit until it is standing right in it. This has nothing to do with this software, it is just a limitation of blind turtles.</li>
+<li>Turtles cannot distinguish between friendly/enemy mobs or players, but as they are rather impatient, they will try to kill whatever they encounter a little.</li>
+<li>Make sure areas where turtles work and move are chunkloaded, with a some room to spare on the sides. Drones do not consider chunkloading at all, so make sure that if a turtle has to take a detour to a target, it won't run into unloaded chunks.</li>
+<li>There are situations where navigation and exploration may be more specifically optimized, but you cannot optimize pathfinding for mazes and open space at once - so i have tried to strike a balanced compromise that works in (almost) any situation at decent speed.</li>
+<li>So if your drones are taking hours making their way through the landscape, that may well be normal, depending on the kind of route they have to explore.</li>
+<li>Pathfinding will also try to balance path-lengths, turns-in-a-path, caching and calculation time, trying to determine paths that are not necessarily shortest, but actually fastest from calculation to arrival. A lot of time has been spend on trying out different realistic usage-scenarios and timing different methods within them to come up with this, a little weird, system. Turtles may seem to just randomly run around when exploring an area, but the spots they choose to explore have been chosen with method, to have high efficiency in a large range of situations.</li>
 </ul>
 
 ---
@@ -75,7 +81,7 @@ bringing back the loot to your base.
 You will need:
 <ul>
 <li>ComputerCraft</li>
-<li>http api enable in CC configs (only needed for installer and infoserver)</li>
+<li>http API enabled in CC configs (only needed for installer and infoserver)</li>
 <li>increase the range of wireless modems (not needed, but no fun without)</li>
 </ul>
 
