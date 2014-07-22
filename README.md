@@ -60,12 +60,16 @@ bringing back the loot to your base.
 
 ---
 
-###Known problems and important notes:
+###Known problems:
 <ul>
 <li>Too many drones will make everything CC stop working, seems to depend on server-power though.</li>
 <li>Still a bit tricky to set up, with the ids and stuff.</li>
 <li>Since the jobserver, restarting jobs at same spot after crash needs some work.</li>
 <li>Lots of bugs!</li>
+</u>
+
+###Notes:
+<ul>
 <li>Turtles are basically blind, they only sense what they can bump into. That means that for a turtle to navigate a large space, especially if it is a dead end, it has to visit every spot that may be part of a path. And by visit i mean actually move to that spot, it cannot see the obvious exit until it is standing right in it. This has nothing to do with this software, it is just a limitation of blind turtles.</li>
 <li>Turtles cannot distinguish between friendly/enemy mobs or players, but as they are rather impatient, they will try to go around, wait until it has moved or just kill whatever they encounter depending on situation.</li>
 <li>Make sure areas where turtles work and move are chunkloaded, with a some room to spare on the sides. Drones do not consider chunkloading at all, so make sure that if a turtle has to take a detour to a target, it won't run into unloaded chunks.</li>
@@ -161,5 +165,5 @@ You have to take care of chunkloading yourself. But, alas, take a look at this: 
 ---
 
 ##Yeah, ok, but really... why?
-To learn lua, to try out some stuff around pathfinding, and to have a playground to experiment with robot-like systems. This was my first foray into lua, to see what that language i already integrated into C++ programs actually is like. 
+To learn lua, to try out some stuff around pathfinding, and to have a playground to experiment with robot-like systems. This was my first foray into lua, to see what that language actually is like from a users point of view. 
 What a fool i was to ignore it's blissfull simplicity for so long.
