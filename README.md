@@ -157,3 +157,9 @@ Jobs can be send by specifying a file or a string containing a valid job.<br/>
 ---
 
 You have to take care of chunkloading yourself. But, alas, take a look at this: <a href="http://www.computercraft.info/forums2/index.php?/topic/18156-mc-16-cc-158-163-turtle-chunkloaders-mining-chunkloaders-crmod/">CR's turtle peripherals</a>
+
+---
+
+##Yeah, ok, but really... why?
+To learn lua, to try out some stuff around pathfinding, and to have a playground to experiment with robot-like systems. This was my first foray into lua, to see what that language i already integrated into C++ programs actually is like. 
+What a fool i was to ignore it's blissfull simplicity for so long.
