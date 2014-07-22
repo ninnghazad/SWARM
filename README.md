@@ -66,7 +66,7 @@ bringing back the loot to your base.
 <li>Still a bit tricky to set up, with the ids and stuff.</li>
 <li>Since the jobserver, restarting jobs at same spot after crash needs some work.</li>
 <li>Lots of bugs!</li>
-</u>
+</ul>
 
 ###Notes:
 <ul>
