@@ -67,7 +67,7 @@ bringing back the loot to your base.
 <li>Since the jobserver, restarting jobs at same spot after crash needs some work.</li>
 <li>Lots of bugs!</li>
 <li>Turtles are basically blind, they only sense what they can bump into. That means that for a turtle to navigate a large space, especially if it is a dead end, it has to visit every spot that may be part of a path. And by visit i mean actually move to that spot, it cannot see the obvious exit until it is standing right in it. This has nothing to do with this software, it is just a limitation of blind turtles.</li>
-<li>Turtles cannot distinguish between friendly/enemy mobs or players, but as they are rather impatient, they will try to kill whatever they encounter a little.</li>
+<li>Turtles cannot distinguish between friendly/enemy mobs or players, but as they are rather impatient, they will try to go around, wait until it has moved or just kill whatever they encounter depending on situation.</li>
 <li>Make sure areas where turtles work and move are chunkloaded, with a some room to spare on the sides. Drones do not consider chunkloading at all, so make sure that if a turtle has to take a detour to a target, it won't run into unloaded chunks.</li>
 <li>There are situations where navigation and exploration may be more specifically optimized, but you cannot optimize pathfinding for mazes and open space at once - so i have tried to strike a balanced compromise that works in (almost) any situation at decent speed.</li>
 <li>So if your drones are taking hours making their way through the landscape, that may well be normal, depending on the kind of route they have to explore.</li>
