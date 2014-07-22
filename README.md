@@ -123,6 +123,7 @@ config entries (among others):
     config["rechargePos"] = {1,2,3,4}
     config["storagePos"] = {1,2,3,5}
 ```
+---
 
 ###Examples:
 Jobs can be send by specifying a file or a string containing a valid job.<br/>
