@@ -1,7 +1,6 @@
 -- SWARM Status Listener
 -- Collects status messages from drones and sends them to webdisplay.
 
-
 infoserver = {}
 version = "0.1"
 os.loadAPI("swarm")
@@ -16,16 +15,10 @@ local scrollPosX = 1
 local scrollPosY = 1
 local data = {}
 
-
 -- Code:
 function main()
 	swarm.openModem()
-	local t = os.startTimer(4)
-	local e,msg,r,c
-	local str = ""
-	local startTime = os.clock()
-	
-	local request = nil
+	local e,c
 	local actions = {
 		[101] = function(e)
 			if data[e[2]] == nil then data[e[2]] = {} end
@@ -61,8 +54,9 @@ function main()
 			os.shutdown()
 			end,
 	}
+	
 	-- Event loop, run forever
-	while true do
+	while not swarm.quit do
 		e = {os.pullEvent("rednet_message")}
 		c = e[3]:byte(1)
 		if actions[c] ~= nil then
@@ -74,7 +68,7 @@ end
 
 function ask()
 	swarm.openModem()
-	while true do
+	while not swarm.quit do
 		rednet.broadcast(string.char(100))
 		rednet.broadcast(string.char(120))
 		--print("ask")
@@ -108,7 +102,7 @@ function key()
 	}
 	
 	-- Event loop, run forever
-	while true do
+	while not swarm.quit do
 		e = {os.pullEvent("key")}
 		c = e[2]
 		if actions[c] ~= nil then
@@ -119,48 +113,66 @@ function key()
 		end
 	end
 end
+
 function gui()
-	while true do
-		term.setCursorPos(1,1)
+	while not swarm.quit do
 		term.clear()
+		term.setCursorPos(1,1)
+		
 		print(swarm.getInfoString().." "..swarm.activityIndicator())
 		print("Press arrows to scroll, q to quit. ["..scrollPosX.."x"..scrollPosY.."]")
 		local tmp,n,i
-		
 		
 		i = 1
 		for k,v in swarm.pairsAssoc(data) do
 			if i >= scrollPosY then
 				tmp = k..": "
 				n = width - #tmp
-				
 				io.write(tmp)
 				if type(v) == "table" then
+					print(textutils.serialize(v))
+					--[[
 					for kk,vv in pairs(v) do
-						if type(vv) == "table" then
-							io.write(string.sub(vv[#vv],scrollPosX,n+scrollPosX-1))
+						if type(vv) == "table" and swarm.countArray(vv) > 0 then
+							local tmp = nil
+							local high = 0
+						--	print(textutils.serialize(vv))
+						--	sleep(100)
+							for kkk,vvv in ipairs(vv) do
+								
+								if type(kkk) == "number" and kkk > high then
+									high = kkk
+									tmp = vvv
+								end
+							end
+							if type(vvv) ~= nil then
+								io.write(string.sub(tostring(vvv),scrollPosX,n+scrollPosX-1))
+							end
 						end
-						
 					end
-				else io.write(v)
+					--]]
+				elseif type(v) == "string" or type(v) == "number" then
+					io.write(v)
 				end
 				io.write("\n")
+				
 			end
 			i = i + 1
 		end	
-		-- Update local display at 10 fps
-		sleep(0.5)
+		-- Update local display at 1 fps
+		sleep(1)
 	end
 end
+
 function send()
-	while true do
+	while not swarm.quit do
 		-- JSON-Encode the data to be send, this is a mess, make it simpler and with less exceptions
 		str = "{"
 		for k,v in pairs(data) do
 			sleep(0)
 			str = str.."\""..k.."\": [ "
 			if v[1] ~= nil then
-			v[1] = string.gsub(v[1],'"',"'")
+				v[1] = string.gsub(v[1],'"',"'")
 			end
 			if v ~= nil and v[1] ~= nil and v[2] ~= nil and v[2]["uptime"] ~= nil then
 				str = str.."\""..v[1].." up: "..v[2]["uptime"].."s\","
@@ -171,7 +183,7 @@ function send()
 				
 				if v[3] ~= nil and type(v[3]) == "table" and #v[3] > 0 then
 					str = str.."{"
-					for i,vv in pairs(v[3]) do
+					for i,vv in swarm.assocPairs(v[3]) do
 						sleep(0)
 						--if type(vv) == "string" then
 							vv = string.gsub(vv,'"',"'")
@@ -201,11 +213,12 @@ function send()
 end
 
 function run()
+
 	function wrapMain() return swarm.wrap(main,"main") end 
 	function wrapGui() return swarm.wrap(gui,"gui") end 
 	function wrapAsk() return swarm.wrap(ask,"ask") end 
 	function wrapSend() return swarm.wrap(send,"sender") end 
 	function wrapKeyboard() return swarm.wrap(key,"keyboard handler") end 
-	--parallel.waitForAny(wrapMain,wrapGui,wrapKeyboard,warpSend,wrapAsk)
+
 	parallel.waitForAny(wrapMain,wrapAsk,wrapKeyboard,wrapSend,wrapGui)
 end

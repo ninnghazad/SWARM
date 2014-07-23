@@ -1664,7 +1664,8 @@ function net()
 	end
 end
 function requestJob()
-	rednet.send(config["jobServerID"],string.char(20))
+	--rednet.send(config["jobServerID"],string.char(20))
+	rednet.broadcast(string.char(20))
 	return os.startTimer(4)
 end
 function goHome(force)
@@ -1676,11 +1677,9 @@ function goHome(force)
 end
 -- This executes the actual job and is called as a coroutine through parallel-API
 function main()
-	swarm.status("main() started",true,-1000)
+	swarm.status("main() started",true)
 	
 	
-	
-	config["jobServerID"] = 25
 	config["jobPos"] = config["homePos"]
 	local e,msg,func,r,error
 	swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.")
@@ -1693,8 +1692,8 @@ function main()
 		e = {os.pullEvent()}
 		
 		if e[1] == "timer" and e[2] == jobRequestTimeout then
-			print("No answer from jobserver "..config["jobServerID"]..", resending...")
-			swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is trying to contact jobserver "..config["jobServerID"]..".")
+			print("No answer from any jobserver within timeout, resending...")
+			swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is trying to contact a jobserver.")
 				
 			jobRequestTimeout = requestJob()
 		elseif e[1] == "modem_message" then
@@ -1702,12 +1701,13 @@ function main()
 				msg = textutils.unserialize(string.sub(e[5]["message"],2))
 				jobRequestTimeout = nil
 				if msg == nil then
-					swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.")
-					print("Currently nothing to do, waiting ...")
+					swarm.status("drone is checking supplies.")
 					resupply()
-					sleep(4)
+					swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.",true)
+					sleep(30)
 					jobRequestTimeout = requestJob()
 				else
+					config["jobServerID"] = e[4]
 					jobId = msg[1]
 					config["jobStatus"] = msg[2][1]
 					msg = msg[2][2]
@@ -1848,10 +1848,10 @@ function run()
 		return
 	end
 
+	
 	-- Get global environment
 	env = getfenv()
-	--env.textutils = textutils
-
+	
 	--swarm.wrap(function() print("AHA") return true end,"TEST")
 	swarm.status("starting routines...\n")
 

@@ -30,37 +30,37 @@ function load()
 	if config == nil then 
 		return nil
 	end
-	print(textutils.serialize(config))
+
 	active = config["active"] or {}
 	jobs = config["jobs"] or {} 
 	sent = config["sent"] or {}
 	
 	swarm.statistics["Loaded Jobs"] = swarm.statistics["Loaded Jobs"] + swarm.countArray(jobs)
 	if type(sent) == "table" then
-		
 		for i,v in pairs(sent) do
 			jobs[#jobs+1] = v
-			--table.remove(sent,i)
 			swarm.statistics["Loaded Jobs"] = swarm.statistics["Loaded Jobs"] + 1
 		end
 	end
 	sent = {}
-	for i,v in pairs(active) do
-		jobs[#jobs+1] = v
-		swarm.statistics["Loaded Jobs"] = swarm.statistics["Loaded Jobs"] + 1
+	if type(active) == "table" then
+		for i,v in pairs(active) do
+			jobs[#jobs+1] = v
+			swarm.statistics["Loaded Jobs"] = swarm.statistics["Loaded Jobs"] + 1
+		end
 	end
 	active = {}
 	lastId = config["lastJobID"] or 0
 	return config
 end
+
 function main()
 	swarm.status("main() started",true,-1000)
+	
 	while not swarm.quit do
-		swarm.status("main routine: jobs: "..swarm.countArray(jobs).." active: "..swarm.countArray(active).." sent: "..swarm.countArray(sent).." finished: "..config["finished"])
+		swarm.status("main routine: jobs: "..swarm.countArray(jobs).." active: "..swarm.countArray(active).." sent: "..swarm.countArray(sent))
+	
 		e = {os.pullEvent("modem_message")}
-	--	if e[3] == 17 then
-	--		print("j: "..#jobs.." s: "..#sent.." a: "..#active)
-	--	end
 		if e[5]["message"]:byte(1) == 20 then -- drone request a job to do
 			--print(textutils.serialize(e[3]).." requests job")
 			if #jobs == 0 then
@@ -167,7 +167,7 @@ end
 function run()
 	term.clear()
 	term.setCursorPos(1,1)
-	
+		
 	-- Prepare statistics table
 	swarm.statistics["Created Jobs"] = 0
 	swarm.statistics["Bad Jobs"] = 0
@@ -184,6 +184,7 @@ function run()
 	
 	-- Load config or create a default one.
 	load()
+	
 	if not config then
 		print("No config found, trying to create one.")
 		config = config or {}
@@ -195,10 +196,9 @@ function run()
 
 	-- Get global environment so we can pass it to the job-script
 	env = getfenv()
-		
-	--swarm.wrap(function() print("AHA") return true end,"TEST")
-	swarm.status(0,"starting routines...\n")
-
+	
+	swarm.status("starting routines...",true)
+	
 	-- Wrappers, to catch errors and stuff
 	function wrapMain() return swarm.wrap(main,"main") end 
 	parallel.waitForAny(wrapMain,swarm.wrapGui)

@@ -70,8 +70,8 @@ end
 	local ttraceback=function(level,terr)
 		local terr=terr or {}
 		local passed={}
-		local err,ok=terr
-		local j=(level or 0)
+		local err,ok=terr,last
+		local j=level or 0
 		--print(textutils.serialize({err,ok}))
 		repeat
 			j=j+1
@@ -80,6 +80,9 @@ end
 			--print(textutils.serialize({err,ok}))
 			if err:match('^[^:]+')=='bios' then break end
 			table.insert(terr,err)
+
+			if j > 32 or last == err then break end
+			last = err
 		until (false)--(passed[err])
 		return terr
 	end
@@ -112,10 +115,16 @@ end
 		local line,f0,f1
 		local functionName = "no function"
 		local ok,f=pcall(fs.open,path,'r')
+		local lines = {}
 		if not ok or not f then table.insert(ts,'	(could not open file)')
 		else
+			repeat
+				line = f:readLine()
+				table.insert(lines, line)
+			until not line
+			
 			for i=1,l-diameter-1 do
-				line = f.readLine()
+				line = lines[i]
 				
 				f0 = line:find("--")
 				f1 = line:find("function")
@@ -124,28 +133,32 @@ end
 				end
 			end
 			
-			for i=1,diameter do
-				line = f.readLine()
-				
-				f0 = line:find("--")
-				f1 = line:find("function")
-				if f1 ~= nil and (f0 == nil or f0 >= f1) then
-					functionName = line:match('^.*function (.*)')
+			for i=l-diameter,l-1 do
+				line = lines[i]
+				if line ~= nil then
+					f0 = line:find("--")
+					f1 = line:find("function")
+					if f1 ~= nil and (f0 == nil or f0 >= f1) then
+						functionName = line:match('^.*function (.*)')
+					end
+					table.insert(ts,"   ["..functionName.."] "..line)
 				end
-				table.insert(ts,"   ["..functionName.."] "..line)
 			end
 			
-			line = f.readLine()
+			line = lines[l]
 			if not short then
 				table.insert(ts,"-> ["..functionName.."] "..line)
 			else
 				table.insert(ts,name..":"..l..":"..functionName..": "..line)
 			end
 			
-			for i=1,diameter do
-				local l=f.readLine()
-				if l then table.insert(ts,'	'..l)
-				else break end
+			for i=l+1,l+diameter do
+				line = lines[i]
+				if line then 
+					table.insert(ts,"   ["..functionName.."] "..line)
+				else 
+					break 
+				end
 			end
 		end
 	end
@@ -190,9 +203,9 @@ end
 	end
 	
 	function depth()
-		--print(textutils.serialize(ttraceback(0,{})))
+		
 		local r = ttraceback(0,{})
-		return #r
+		return #r-5
 	end
 
 	function traceback(msg,level)

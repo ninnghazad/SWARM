@@ -10,7 +10,7 @@
 
 os.loadAPI("mapserver") -- includes swarm api
 
-swarm.status(0,"\nmapserver "..os.getComputerID().." '"..os.getComputerLabel().."' booting...\n")
+swarm.status(swarm.getSystemType().." "..os.getComputerID().." '"..os.getComputerLabel().."' booting...")
 
 mapserver.run()
 -- ############################################################################

@@ -158,15 +158,18 @@ function sortAssocTable(t)
 	table.sort(t, sortAssocTableCompare)
 	return t
 end
-function pairsAssoc (t, f)
+function pairsAssoc(t, f)
+	--if type(t) ~= "table" then err("this function can only handle tables") end
 	local a = {}
 	for n in pairs(t) do table.insert(a, n) end
-		table.sort(a, f)
-		local i = 0      -- iterator variable
-		local iter = function ()   -- iterator function
+	table.sort(a, f)
+	local i = 0   		   -- iterator variable
+	local iter = function ()   -- iterator function
 		i = i + 1
-		if a[i] == nil then return nil
-			else return a[i], t[a[i]]
+		if a[i] == nil then 
+			return nil
+		else 
+			return a[i], t[a[i]]
 		end
 	end
 	return iter
@@ -194,7 +197,7 @@ function err(e)
 	term.clear()
 	term.setCursorPos(1,1)
 	print(msg)
-	msg = msg.."\n"..debug.traceback("",1).."\n\n"
+	msg = msg.."\n"..debug.traceback("").."\n\n"
 	log(msg)
 	_errorEnd()
 end
@@ -206,6 +209,7 @@ function getSystemType(t)
 	return systemType
 end
 function countArray(array)
+	if type(array) ~= "table" then return nil end
 	local i,v
 	local count = 0
 	for i,v in pairs(array) do
@@ -234,7 +238,7 @@ function _gui()
 		msg = getInfoString().." "..activityIndicator()
 		os.setComputerLabel(msg)
 		msg = msg.."\n"
-		msg = msg.."[uptime - sys.: "..formatTime(os.clock(),true)..", prog.: "..formatTime((timestamp()-startTime)/20,true).."]".."\n"
+		msg = msg.."[uptime - sys.: "..formatTime(os.clock(),true).."]".."\n"
 		for k,v in pairsAssoc(statistics) do
 			msg = msg ..k..": "..v.."\n"
 		end
@@ -303,12 +307,12 @@ function status(msg,doPrint,callDepth)
 	if callDepth == nil or type(callDepth) ~= "number" then
 		err("BUG: nil callDepth to status() ! '"..textutils.serialize(callDepth).."'")
 	end
-	
+
 	if callDepth >= 0 and type(_status) == "table" then
 		local change = true
 		while change do
 			change = false
-			for k,v in pairs(_status) do
+			for k,v in pairsAssoc(_status) do
 				if k > callDepth then
 					table.remove(_status,k)
 					change = true
@@ -317,10 +321,12 @@ function status(msg,doPrint,callDepth)
 			end
 		end
 	end
+
 	__status = msg
---	_status = _status or {}
 	_status[callDepth] = __status
---	log(textutils.serialize(_status))
+	
+--	log("["..callDepth.."]\n"..textutils.serialize(_status))
+	
 end
 
 textutils.serializeMap = function( t )
@@ -333,13 +339,16 @@ textutils.serializeMap = function( t )
 	return result.."}"
 end
 
+
 function wrap(func,name)
 	--local r = xpcall(func,err)
 	local function ferr(e)
+		e = e or unknownErrorString
 		err(e)
 	end
 	--setfenv(ferr,env)
 	--setfenv(func,env)
+	
 	local r = xpcall(func,ferr)
 	--[[
 	while r ~= true do
@@ -350,6 +359,7 @@ function wrap(func,name)
 		
 	end
 	--]]
+	
 	while _error and not _errorDone do
 		sleep(1)
 	end
@@ -487,10 +497,7 @@ function openModem()
 			rednet.open( sFreeSide )
 			return true
 		else
-			print("No modem attached!")
-			sleep(1)
-			os.exit()
-			return false
+			err("No modem attached!")
 		end
 	end
 	return true
@@ -503,13 +510,13 @@ function loadConfig()
 		print("Loading "..fs.getSize(configFileName).." bytes of config data...")
 		local config = textutils.unserialize(file.readAll())
 		if config == nil or type(config) ~= "table" then
-			status(-100,"WARN: Could not unserialize config file.")
+			status("WARN: Could not unserialize config file.",true,-100)
 			return false
 		end
 		file.close()
 		return config
 	else
-		status(-100,"WARN: Could not read config file.")
+		status("WARN: Could not read config file.",true,-100)
 		--print(""..nil)
 		return nil
 	end
@@ -527,11 +534,7 @@ function saveConfig(configOverride)
 		file.close()
 		return true
 	else
-		print("FATAL: Could not write config '"..configFileName.."'.")
-		err("FATAL: Could not write config '"..configFileName.."'.")
-		--print(""..nil)
-		--quit = true
-		return false
+		err(fatalErrorString..": Could not write config '"..configFileName.."'.")
 	end
 end
 
