@@ -14,13 +14,14 @@ jobs = {}
 sent = {}
 --local active = {}
 active = {}
-
+failed = {}
 counter = {}
 
 function save()
 	config["active"] = active
 	config["jobs"] = jobs
 	config["sent"] = sent
+	config["failed"] = failed
 	config["lastJobID"] = lastId
 	swarm.saveConfig(config)
 end
@@ -31,6 +32,7 @@ function load()
 		return nil
 	end
 
+	failed = config["failed"] or {}
 	active = config["active"] or {}
 	jobs = config["jobs"] or {} 
 	sent = config["sent"] or {}
@@ -111,7 +113,7 @@ function main()
 			msg = msg[3]
 		--	print("drone "..e[4].." reports for job "..jobid..": status: "..status.." msg: "..msg)
 			if status == -1 then
-				table.insert(jobs,active[jobid])
+				table.insert(failed,active[jobid])
 				table.remove(active,jobid)
 				save()
 				swarm.statistics["Failed Jobs"] = swarm.statistics["Failed Jobs"] + 1
@@ -125,11 +127,19 @@ function main()
 			end
 		elseif e[5]["message"]:byte(1) == 25 then -- someone sends a new job.
 			msg = textutils.unserialize(string.sub(e[5]["message"],2))
-			if msg ~= nil then
-				local r,error
-				r = loadstring(msg[1])
-				if r == nil or type(r) == "table" then
-					rednet.send(e[4],string.char(26)..textutils.serialize({false,error}))
+			if msg ~= nil and type(msg[1]) == "string" then
+				local fail = false
+				local tmpe = ""
+				local function ferr(e)
+					fail = true
+					tmpe = e
+				end
+				local r,_e = xpcall(function() return loadstring(msg[1]) end,ferr)
+				
+				if fail then _e = tmpe end
+			
+				if r == nil or not r or fail then
+					rednet.send(e[4],string.char(26)..textutils.serialize({false,_e}))
 				
 					swarm.statistics["Bad Jobs"] = swarm.statistics["Bad Jobs"] + 1
 				else

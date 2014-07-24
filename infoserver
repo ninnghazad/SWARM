@@ -183,7 +183,7 @@ function send()
 				
 				if v[3] ~= nil and type(v[3]) == "table" and #v[3] > 0 then
 					str = str.."{"
-					for i,vv in swarm.assocPairs(v[3]) do
+					for i,vv in swarm.pairsAssoc(v[3]) do
 						sleep(0)
 						--if type(vv) == "string" then
 							vv = string.gsub(vv,'"',"'")

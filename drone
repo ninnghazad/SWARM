@@ -59,7 +59,7 @@ function navmap:set2(x,y,z,v)
 	-- Send message of type 3 (set worldmap value) to mapserver
 	rednet.send(config["mapServerID"],string.char(3)..textutils.serialize({x,y,z,v}))
 	-- Set value in local cache with current timestamp
-	navmap:set(x,y,z,{swarm.timestamp(),{v,1}})	
+	navmap:set(x,y,z,{swarm.timestamp(),{v,1}})
 end
 
 function navmap:get2(x,y,z,cacheonly)
@@ -521,11 +521,11 @@ function go(dir)
 			return 0
 		elseif d == 0 then
 			swarm.status("Cannot go there: mob or player.")
-			swarm.status("path blocked by mob or player, trying to kill it!")
+			
 			attackDir(dir)
 		elseif d == -1 then
 			swarm.status("Cannot go there: other drone.")
-			swarm.status("path blocked by other drone!")
+			
 			return -2
 		--	sleep(1)
 			-- do not attack other drones
@@ -923,8 +923,16 @@ function moveTo(target,retries)
 		
 	end
 	
-	swarm.status("move to "..target[1]..","..target[2]..","..target[3].." ["..(#target).."] - "..retries.." retries.")
 	
+	if #target == 7 then
+		swarm.status("move to "..target[1]..","..target[2]..","..target[3]..","..target[4]..","..target[5]..","..target[6]..","..target[7].." ["..(#target).."] - "..retries.." retries.")
+	elseif  #target == 6 then
+		swarm.status("move to "..target[1]..","..target[2]..","..target[3]..","..target[4]..","..target[5]..","..target[6].." ["..(#target).."] - "..retries.." retries.")
+	elseif  #target == 4 then
+		swarm.status("move to "..target[1]..","..target[2]..","..target[3]..","..target[4].." ["..(#target).."] - "..retries.." retries.")
+	elseif  #target == 3 then
+		swarm.status("move to "..target[1]..","..target[2]..","..target[3].." ["..(#target).."] - "..retries.." retries.")
+	end
 	local r = findPath(target)
 	while not r and (retries < 0 or retries > 0) do
 		--sleep(0) -- MARKMARK--
@@ -1675,21 +1683,23 @@ function goHome(force)
 		moveToPos("homePos",0)
 	end
 end
--- This executes the actual job and is called as a coroutine through parallel-API
+
 function main()
 	swarm.status("main() started",true)
 	
 	
 	config["jobPos"] = config["homePos"]
-	local e,msg,func,r,error
-	swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.")
+	local e,msg,func,r,_e
+	
 	local jobId,jobStatus
-
+	swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is returning home to get ready for orders.",true)
 	goHome(true)
-	local jobRequestTimeout = requestJob()
 
+	local jobRequestTimeout = requestJob()
+	print("requested")
 	while true do
-		e = {os.pullEvent()}
+		
+		e = {os.pullEvent()} --{"timer","modem_message"}
 		
 		if e[1] == "timer" and e[2] == jobRequestTimeout then
 			print("No answer from any jobserver within timeout, resending...")
@@ -1708,21 +1718,27 @@ function main()
 					jobRequestTimeout = requestJob()
 				else
 					config["jobServerID"] = e[4]
+					swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") received job from #"..e[4]..".",true)
 					jobId = msg[1]
 					config["jobStatus"] = msg[2][1]
 					msg = msg[2][2]
 
 					-- Tell server that we accept the job
 					rednet.send(e[4],string.char(22)..textutils.serialize({jobId,true}))
-					print("accepted job "..jobId)
+					swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") accepted job from #"..e[4]..".",true)
 					func = loadstring(msg)
 					setfenv(func,env)
-					
-					r,error = pcall(func)
+					local tmpe
+					local function ferr(e)
+						tmpe = swarm.softError(e)
+						return tmpe
+					end
+					r,_e = xpcall(func,ferr)
+					print("after")
 					if not r then
-						print("job failed, retry")
+						print("notifying jobserver "..config["jobServerID"]..", job failed: "..textutils.serialize({r,tmpe}))
 						-- Tell server that we failed doing the job
-						rednet.send(config["jobServerID"],string.char(24)..textutils.serialize({jobId,-1,error}))
+						rednet.send(config["jobServerID"],string.char(24)..textutils.serialize({jobId,-1,tmpe}))
 					else
 						print("job ok: "..textutils.serialize(r))
 						-- Tell server that we did the job
@@ -1731,6 +1747,8 @@ function main()
 				
 					goHome()
 					
+					sleep(1)
+					swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.",true)
 					jobRequestTimeout = requestJob()
 				end
 	--		return

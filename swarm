@@ -201,7 +201,15 @@ function err(e)
 	log(msg)
 	_errorEnd()
 end
-
+function softError(e)
+	--print(msg)
+	if type(e) ~= "string" then
+		e = textutils.serialize(e)
+	end
+	msg = e.."\n"..debug.traceback("").."\n\n"
+	log(msg)
+	return msg
+end
 function setSystemType(t)
 	systemType = t
 end
