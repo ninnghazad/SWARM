@@ -67,12 +67,13 @@ end
 
 
 function ask()
-	swarm.openModem()
+	--swarm.openModem(swarm.id)
+	--swarm.openModem(swarm.CHANNEL_DRONE_BROADCAST)
 	while not swarm.quit do
-		rednet.broadcast(string.char(100))
-		rednet.broadcast(string.char(120))
+		rednet.send(swarm.CHANNEL_BROADCAST,string.char(100))
+		rednet.send(swarm.CHANNEL_BROADCAST,string.char(120))
 		--print("ask")
-		sleep(1)
+		sleep(4)
 	end
 end
 	

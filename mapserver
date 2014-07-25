@@ -21,6 +21,7 @@ end
 local function init()
 	print("Booting...")
 	swarm.openModem()
+	swarm.openModem(swarm.CHANNEL_DRONE_BROADCAST)
 	locate()
 	load()
 	return true
@@ -28,6 +29,7 @@ end
 
 function net()
 	swarm.status("mapserver is now running")
+	swarm.openModem(swarm.id)
 	local e,coord,msg,stink,id
 	-- using a table of functions is faster then a bunch of if/elseifs
 	local actions = {

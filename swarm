@@ -31,6 +31,13 @@ function timestamp()
 	return (os.day()*24000)+(os.time()*1000)
 end
 
+
+CHANNEL_GPS = gps.CHANNEL_GPS
+CHANNEL_DRONE_BROADCAST = 65533
+CHANNEL_JOB_BROADCAST = 65532
+CHANNEL_BROADCAST = 65535
+modem = nil
+
 version = "0.1"
 label = os.getComputerLabel()
 id = os.getComputerID()
@@ -487,26 +494,30 @@ end
 
 
 -- got this somewhere, too lazy
-function openModem()
-	local bOpen, sFreeSide = false, nil
-	for n,sSide in pairs(rs.getSides()) do	
-		if peripheral.getType( sSide ) == "modem" then
-			sFreeSide = sSide
-			if rednet.isOpen( sSide ) then
-				bOpen = true
-				break
+function openModem(channel)
+	if modem == nil then
+		for n,sSide in pairs(rs.getSides()) do	
+			if peripheral.getType( sSide ) == "modem" then
+				modem = peripheral.wrap(sSide)
+				rednet.open(sSide) --? mjeh
+				
+				
 			end
 		end
 	end
-	
-	if not bOpen then
-		if sFreeSide then
-			--print( "No modem active. Opening "..sFreeSide.." modem" )
-			rednet.open( sFreeSide )
-			return true
-		else
-			err("No modem attached!")
-		end
+	if modem == nil then
+		err("No modem attached!")
+		return false
+	end
+	if channel == nil then
+		-- open default channels, just like rednet.open does
+		modem.open(id)
+		modem.open(CHANNEL_BROADCAST)
+		
+	--	print("openened default channels "..id.." and "..CHANNEL_BROADCAST)
+	else
+		-- open specific channel
+		modem.open(channel)
 	end
 	return true
 end

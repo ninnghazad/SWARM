@@ -59,7 +59,7 @@ function navmap:set2(x,y,z,v)
 	-- Send message of type 3 (set worldmap value) to mapserver
 	rednet.send(config["mapServerID"],string.char(3)..textutils.serialize({x,y,z,v}))
 	-- Set value in local cache with current timestamp
-	navmap:set(x,y,z,{swarm.timestamp(),{v,1}})
+	navmap:set(x,y,z,{swarm.timestamp(),{v,1}})	
 end
 
 function navmap:get2(x,y,z,cacheonly)
@@ -93,22 +93,13 @@ function navmap:get2(x,y,z,cacheonly)
 	-- Prepare query of type 1 (get value from worldmap)
 	local request = string.char(1).."{"..x..","..y..","..z.."}"
 	
-	
+	swarm.openModem(swarm.id)
 	-- Send query to mapserver
-	-- rednet.send(config["mapServerID"],request,true)
---	if not peripheral.call("right","isOpen",config["mapServerID"]) then
---		peripheral.call("right","open",config["mapServerID"])
---	end
---	if peripheral.call("right","isOpen",65535) then
---		peripheral.call("right","close",65535)
---	end
---	log("request\n")
---	peripheral.call("right", "transmit", config["mapServerID"], id, request)
-
 	rednet.send(config["mapServerID"],request)
 
 	local event,side,id,rid,msg,info,dist 
 	local timeout = os.startTimer(4)
+	
 	-- Wait for response
 	while true do
 		if repeats > 0 then
@@ -494,7 +485,7 @@ function broadcast()
 	local msg
 	navmap:set(pos[1],pos[2],pos[3],{swarm.timestamp(),{0,1}})
 	msg = "{"..(pos[1])..","..(pos[2])..","..(pos[3])..","..(string.format("%q",swarm.__status))..',["unloaded"]='..(unloaded)..',["uptime"]='..((swarm.timestamp()-startTime)/20).."}"
-	rednet.broadcast(string.char(10)..msg)
+	rednet.send(swarm.CHANNEL_DRONE_BROADCAST,string.char(10)..msg)
 	--os.setComputerLabel("drone "..id.." "..swarm.activityIndicator())
 	--print(textutils.serialize(_status))
 	return true
@@ -804,7 +795,7 @@ function findPath(target)
 				end	
 			end
 			if queue:empty() then
-				swarm.status("queue empty??? at"..os.clock(),true,-21)
+			--	swarm.status("queue empty??? at"..os.clock(),true,-21)
 				qe = true
 				break
 			end
@@ -1541,11 +1532,11 @@ end
 -- Timed broadcast - actually only needed when we're not moving around
 function cast()
 	swarm.status("cast() started",true,-1002)
-	peripheral.call("right","open",65535)
-	--rednet.open("right")
+	
 	while true do
 		sleep(1)
-		peripheral.call("right","open",65535)
+		-- TODO: this shouldn't be necessary
+	--	peripheral.call("right","open",swarm.CHANNEL_DRONE_BROADCAST)
 		xpcall(broadcast,err)
 	end
 	return true
@@ -1629,51 +1620,56 @@ end
 
 function net()
 	swarm.status("net() started",true,-1001)
-	
-	local e,p
-	swarm.openModem() -- necessary?
-	while true do
-		-- event,side,rid,id,msg,dist = os.pullEvent("modem_message")
-		e = {os.pullEvent("rednet_message")}
-		if e[1] == "rednet_message" then
-			--if e[2] == 38 then print(e[1].." "..e[2].." "..e[3]:byte(1)) end
-			if e[3]:byte(1) == 10 then -- Position broadcasts
-				p = textutils.unserialize(string.sub(e[3],2))
-				if p ~= nil then
-					dronePositions[e[2]] = {p[1],p[2],p[3]}
-				end
-			elseif e[3]:byte(1) == 100 then -- Status query 
-				rednet.send(e[2],string.char(101).."DRONE "..id.." ["..label.."] is at "..pos[1]..","..pos[2]..","..pos[3]..","..swarm.dirNames[swarm.getDirection(xDir,yDir,zDir)].." u:"..unloaded.." f:"..turtle.getFuelLevel())
-			elseif e[3]:byte(1) == 110 then -- Reboot signal
-				swarm.status("received reboot signal")
-				broadcast()
-				swarm.saveConfig(config)
-				rednet.send(e[2],string.char(111))
-				swarm.status("will now reboot")
-				os.reboot()
-				break
-			elseif e[3]:byte(1) == 130 then -- Hard reboot signal
-				os.reboot()
-				break
-			elseif e[3]:byte(1) == 140 then -- Shutdown signal
-				swarm.status("received shutdown signal")
-				broadcast()
-				swarm.saveConfig(config)
-				rednet.send(e[2],string.char(141))
-				swarm.status("will now shutdown")
-				os.shutdown()
-				break
-			elseif e[3]:byte(1) == 120 then -- Full status query
-				rednet.send(e[2],string.char(121)..textutils.serialize(swarm._status))
-			elseif e[3] == "PING" then -- GPS Ping ?!
-				rednet.send(id,textutils.serialize({pos[1],pos[2],pos[3]}))
+	local e,p,c
+	local actions = {
+		[10] = function() 
+			p = textutils.unserialize(string.sub(e[3],2))
+			if p ~= nil then
+				dronePositions[e[2]] = {p[1],p[2],p[3]}
 			end
+		end,
+		[100] = function()
+			rednet.send(e[2],string.char(101).."DRONE "..id.." ["..label.."] is at "..pos[1]..","..pos[2]..","..pos[3]..","..swarm.dirNames[swarm.getDirection(xDir,yDir,zDir)].." u:"..unloaded.." f:"..turtle.getFuelLevel())
+		end,
+		[110] = function()
+			swarm.status("received reboot signal")
+			broadcast()
+			swarm.saveConfig(config)
+			rednet.send(e[2],string.char(111))
+			swarm.status("will now reboot")
+			os.reboot()
+		end,
+		[120] = function()
+			rednet.send(e[2],string.char(121)..textutils.serialize(swarm._status))
+		end,
+		[130] = function()
+			os.reboot()
+			--break
+		end,
+		[140] = function()
+			swarm.status("received shutdown signal")
+			broadcast()
+			swarm.saveConfig(config)
+			rednet.send(e[2],string.char(141))
+			swarm.status("will now shutdown")
+			os.shutdown()
+			--break
+		end,
+	}
+	while true do
+		e = {os.pullEvent("rednet_message")}
+		c = e[3]:byte(1)
+		
+		if actions[c] ~= nil then
+			actions[c]()
 		end
 	end
 end
+
 function requestJob()
 	--rednet.send(config["jobServerID"],string.char(20))
-	rednet.broadcast(string.char(20))
+	--swarm.modem.transmit(swarm.CHANNEL_BROADCAST,swarm.id,string.char(20))
+	rednet.send(swarm.CHANNEL_JOB_BROADCAST,string.char(20))
 	return os.startTimer(4)
 end
 function goHome(force)
@@ -1683,22 +1679,20 @@ function goHome(force)
 		moveToPos("homePos",0)
 	end
 end
-
+-- This executes the actual job and is called as a coroutine through parallel-API
 function main()
 	swarm.status("main() started",true)
-	
-	
+		
 	config["jobPos"] = config["homePos"]
-	local e,msg,func,r,_e
+	local e,msg,func,r,error
 	
 	local jobId,jobStatus
 	swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is returning home to get ready for orders.",true)
 	goHome(true)
-
+	swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.",true)
 	local jobRequestTimeout = requestJob()
 	print("requested")
 	while true do
-		
 		e = {os.pullEvent()} --{"timer","modem_message"}
 		
 		if e[1] == "timer" and e[2] == jobRequestTimeout then
@@ -1728,17 +1722,12 @@ function main()
 					swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") accepted job from #"..e[4]..".",true)
 					func = loadstring(msg)
 					setfenv(func,env)
-					local tmpe
-					local function ferr(e)
-						tmpe = swarm.softError(e)
-						return tmpe
-					end
-					r,_e = xpcall(func,ferr)
-					print("after")
+					
+					r,e = xpcall(func,err)
 					if not r then
-						print("notifying jobserver "..config["jobServerID"]..", job failed: "..textutils.serialize({r,tmpe}))
+						print("job failed, retry: "..textutils.serialize({r,e}))
 						-- Tell server that we failed doing the job
-						rednet.send(config["jobServerID"],string.char(24)..textutils.serialize({jobId,-1,tmpe}))
+						rednet.send(config["jobServerID"],string.char(24)..textutils.serialize({jobId,-1,e}))
 					else
 						print("job ok: "..textutils.serialize(r))
 						-- Tell server that we did the job
@@ -1747,8 +1736,6 @@ function main()
 				
 					goHome()
 					
-					sleep(1)
-					swarm.status("drone '"..os.getComputerLabel().."' ("..os.getComputerID()..") is ready to receive orders.",true)
 					jobRequestTimeout = requestJob()
 				end
 	--		return
@@ -1827,8 +1814,9 @@ function run()
 	end
 
 	-- Open modem
-	swarm.openModem()
-
+	swarm.openModem(swarm.id)
+	swarm.openModem(swarm.CHANNEL_DRONE_BROADCAST)
+	
 	-- Load config or create a default one.
 	config = swarm.loadConfig()
 	if not config or not config["homePos"] then
@@ -1865,7 +1853,6 @@ function run()
 		--sleep(60)
 		return
 	end
-
 	
 	-- Get global environment
 	env = getfenv()

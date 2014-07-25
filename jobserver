@@ -14,14 +14,13 @@ jobs = {}
 sent = {}
 --local active = {}
 active = {}
-failed = {}
+
 counter = {}
 
 function save()
 	config["active"] = active
 	config["jobs"] = jobs
 	config["sent"] = sent
-	config["failed"] = failed
 	config["lastJobID"] = lastId
 	swarm.saveConfig(config)
 end
@@ -32,7 +31,6 @@ function load()
 		return nil
 	end
 
-	failed = config["failed"] or {}
 	active = config["active"] or {}
 	jobs = config["jobs"] or {} 
 	sent = config["sent"] or {}
@@ -113,7 +111,7 @@ function main()
 			msg = msg[3]
 		--	print("drone "..e[4].." reports for job "..jobid..": status: "..status.." msg: "..msg)
 			if status == -1 then
-				table.insert(failed,active[jobid])
+				table.insert(jobs,active[jobid])
 				table.remove(active,jobid)
 				save()
 				swarm.statistics["Failed Jobs"] = swarm.statistics["Failed Jobs"] + 1
@@ -190,7 +188,8 @@ function run()
 	swarm.statistics["No Jobs"] = 0
 	
 	-- Open modem
-	swarm.openModem()
+	swarm.openModem(swarm.id)
+	swarm.openModem(swarm.CHANNEL_JOB_BROADCAST)
 	
 	-- Load config or create a default one.
 	load()
