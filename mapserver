@@ -186,23 +186,30 @@ function binWrite(fileName,data)
 	if fs.exists(fileName) then
 		fs.delete(fileName)
 	end
-	file = fs.open(fileName, "wb")
+	file = fs.open(fileName, "w")
 	local buffer,count,bytes
 	count = {0,0}
+	buffer = ""
 	for z,za in pairs(data) do
 		if type(za) == "table" and swarm.countArray(za) > 0 then
 			for y,ya in pairs(za) do
 				for x,v in pairs(ya) do
-					buffer = encode(x)..encode(y)..encode(z,false,1)..encode(v[1],true,1)..encode(v[2],true,1)
-					for i = 1, #buffer do
-						file.write(buffer:byte(i))
-						count[1] = count[1] + 1
+					buffer = buffer..encode(x)..encode(y)..encode(z,false,1)..encode(v[1],true,1)..encode(v[2],true,1)
+					if #buffer > 1024*4 then -- use 4K buffer
+						sleep(0)
+		 				file.write(buffer)
+						count[1] = count[1] + #buffer
+						buffer = ""
 					end
 					count[2] = count[2] + 1
 				end
 			end
 		end
 	end
+	file.write(buffer)
+	count[1] = count[1] + #buffer
+	buffer = ""
+	
 	for i = 1, #eofMarker do
 		file.write(eofMarker:byte(i))
 		
@@ -211,7 +218,7 @@ function binWrite(fileName,data)
 	
 	swarm.statistics["last written values"] = count[2]
 	swarm.statistics["last written bytes"] = count[1]+#eofMarker
-	swarm.statistics["last written seconds"] = swarm.timestamp() - startTime
+	swarm.statistics["last written seconds"] = (swarm.timestamp() - startTime) / 20
 	return true
 end
 function binRead(fileName,data)

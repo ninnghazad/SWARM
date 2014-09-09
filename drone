@@ -818,7 +818,7 @@ function findPath(target)
 			while tmp[1] ~= pos[1] or tmp[2] ~= pos[2] or tmp[3] ~= pos[3] do
 				swarm.status("found target, reconstructing path "..i.." "..rDir)
 			
-				--sleep(0) -- MARKMARK--
+			--	sleep(0) -- MARKMARK--
 				
 				tmp[1] = tmp[1] + swarm.xDirs[rDir]
 				tmp[2] = tmp[2] + swarm.yDirs[rDir]
@@ -1140,17 +1140,20 @@ function recharge(dir)
 				-- bug?
 			end
 		else 
-			print("sucked fuel")
+		--	print("sucked fuel")
 		end
 		
-		local fuelPerItem = getFuelLevel()
+		local fuelPerItem
+		local fuelLevelBefore = getFuelLevel()
 		--TODO: determine amount of fuel per item and then calculate needed items to be consumed at once
 		while (getFuelLevel() < getFuelLimit()) and (turtle.getItemCount(16) > 0) do
 			select(16)
 			if not turtle.refuel(1) then
 				break
 			end
-			fuelPerItem = fuelPerItem - getFuelLevel()
+			fuelPerItem = getFuelLevel() - fuelLevelBefore
+			
+			print("fuelPerItem: "..fuelPerItem..", items needed: "..math.ceil((getFuelLimit() - getFuelLevel())/fuelPerItem))
 			turtle.refuel(math.max(1,math.min(turtle.getItemCount(16),math.ceil((getFuelLimit() - getFuelLevel())/fuelPerItem))))
 		end
 		
