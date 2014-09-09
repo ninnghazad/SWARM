@@ -136,7 +136,9 @@ function gui()
 					--print(textutils.serialize(v))
 					
 					for kk,vv in pairs(v) do
-						if type(vv) == "table" and swarm.countArray(vv) > 0 then
+						if type(vv) == "string" then
+							io.write(vv)
+						elseif type(vv) == "table" and swarm.countArray(vv) > 0 then
 							local tmp = nil
 							local high = 0
 						--	print(textutils.serialize(vv))
